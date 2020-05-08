@@ -149,6 +149,23 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmov		d31, d18
 .endm
 
+/* Input:
+ *   pA: address of loading from *a
+ *   pB: address of loading from *b
+ * Vector registers:
+ *   v16 ~ v31: c
+ *   v0 ~ v3:   a
+ *   v8, v9, v10, v11: b
+ * Output:
+ *   v16 ~ v31         : updated c
+ *   v4,  v5,  v6,  v7 : next column of a
+ *   v12, v13, v14, v15: next row    of b
+ *   pA: pointing to next elements of *a
+ *   pB: pointing to next elements of *b
+* assumption:
+ *   fmul implies v16 ~ v31 can be any value, no need to zero out.
+ *        when using fmla, it's not.
+ */
 .macro KERNEL8x4_I
 	ldp	q0, q1, [pA], #32
 
@@ -408,6 +425,13 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmov		d29, d16
 .endm
 
+/* Input: 
+ *     v0, v1: a (column 4 elements)
+ *     v8, v9: b (row    4 elements)
+ * Output:
+ *     v16, v20, v24, v28: c row 0 and 1
+ *     v17, v21, v25, v29: c row 2 and 3
+ */
 .macro KERNEL4x4_SUB
 	ld1	{v8.2d, v9.2d}, [pB]
 	add	pB, pB, #32
@@ -464,6 +488,12 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmov		d28, d16
 .endm
 
+/* Input: 
+ *     v0    : a (column 2 elements)
+ *     v8, v9: b (row    4 elements)
+ * Output:
+ *     v16, v20, v24, v28: c row 0 and 1
+ */
 .macro KERNEL2x4_SUB
 	ld1	{v8.2d, v9.2d}, [pB]
 	add	pB, pB, #32
@@ -506,6 +536,12 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmov		d20, d16
 .endm
 
+/* Input: 
+ *     v0.d[0]    : a (column 1 elements)
+ *     v8, v9     : b (row    4 elements)
+ * Output:
+ *     v16, v20   : c row (1 row 4 elements, in two vector registers)
+ */
 .macro KERNEL1x4_SUB
 	ldr	d0, [pA]
 	add	pA, pA, #8
@@ -861,18 +897,18 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	mov	pB, origPB
 #else
 	mov	pB, origPB
-	lsl	temp, tempOffset, #6
-	add	pA, pA, temp
-	lsl	temp, tempOffset, #5
-	add	pB, pB, temp
+	lsl	temp, tempOffset, #6   // #6 = 2^6 = 8 * (double), where 8 is M8
+	add	pA, pA, temp           // pA is moved 'tempOffset' pos. in its k dimention M8
+	lsl	temp, tempOffset, #5   // #5 = 2^5 = 4 * sizeof( double ), where 4 is L4
+	add	pB, pB, temp           // pB is moved 'tempOffset' pos. in its k dimention, L4
 #endif
 
 #if (defined(LEFT) && !defined(TRANSA)) || (!defined(LEFT) && defined(TRANSA))
-	sub	tempK, origK, tempOffset
-#elif defined(LEFT)
-	add	tempK, tempOffset, #8
-#else
-	add	tempK, tempOffset, #4
+	sub	tempK, origK, tempOffset    // tempK is the number of non-zero rows/cols.
+#elif defined(LEFT)  //  defined(LEFT) &&  defined(TRANSA)
+	add	tempK, tempOffset, #8       // 8 is M8
+#else                // !defined(LEFT) && !defined(TRANSA)
+	add	tempK, tempOffset, #4       // 4 is L4
 #endif
 
 	asr 	counterL , tempK, #3		// L = K / 8
@@ -960,9 +996,9 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #if (defined(LEFT) &&  defined(TRANSA)) || (!defined(LEFT) && !defined(TRANSA))
 	sub	tempK, origK, tempOffset
-#if defined(LEFT)
+#if defined(LEFT)  //  defined(LEFT) && defined(TRANSA)
 	sub	tempK, tempK, #8
-#else
+#else              // !defined(LEFT) && !defined(TRANSA)
 	sub	tempK, tempK, #4
 #endif
 	lsl	temp, tempK, #6
@@ -970,6 +1006,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	lsl	temp, tempK, #5
 	add	pB, pB, temp
 #endif
+
 #if defined(LEFT)
 	add	tempOffset, tempOffset, #8
 #endif
@@ -998,9 +1035,9 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	mov	pB, origPB
 #else
 	mov	pB, origPB
-	lsl	temp, tempOffset, #5
-	add	pB, pB, temp
-	add	pA, pA, temp
+	lsl	temp, tempOffset, #5    // #5 = 2^5 = 4 * sizeof( double ), where 4 is L4 and M4
+	add	pB, pB, temp    // pB is moved 'tempOffset' pos. in its k dimention L4
+	add	pA, pA, temp    // pA is moved 'tempOffset' pos. in its k dimention M4
 #endif
 
 #if (defined(LEFT) && !defined(TRANSA)) || (!defined(LEFT) && defined(TRANSA))
@@ -1594,7 +1631,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	add	pB, pB, temp
 #endif
 #if defined(LEFT)
-	add	tempOffset, tempOffset, #1
+	add	tempOffset, tempOffset, #1    // #1 is M1
 #endif
 
 .Ldtrmm_kernel_L2_END:
