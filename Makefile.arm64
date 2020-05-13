@@ -61,5 +61,8 @@ ifeq ($(CORE), TSV110)
 CCOMMON_OPT += -march=armv8.2-a -mtune=tsv110
 FCOMMON_OPT += -march=armv8.2-a -mtune=tsv110
 endif
+ifeq ($(CORE), TSV110SVE)
+CCOMMON_OPT += -march=armv8.2-a+sve -mtune=tsv110
+FCOMMON_OPT += -march=armv8.2-a+sve -mtune=tsv110
 endif
-
+endif
