@@ -70,6 +70,8 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
   BLASLONG ls, is, js;
   BLASLONG min_l, min_i, min_j;
   BLASLONG jjs, min_jj;
+  printf("Enter %s()\n", __func__);
+
 #if !((!defined(UPPER) && !defined(TRANSA)) || (defined(UPPER) && defined(TRANSA)))
   BLASLONG start_ls;
 #endif

@@ -71,6 +71,8 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
   BLASLONG min_l, min_i, min_j;
   BLASLONG jjs, min_jj;
 
+  printf("Enter %s()\n", __func__);
+
 #ifdef TIMING
   unsigned long long rpcc_counter;
   unsigned long long innercost  = 0;
@@ -102,8 +104,10 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
   if (beta) {
 #ifndef COMPLEX
-    if (beta[0] != ONE)
-      GEMM_BETA(m, n, 0, beta[0], NULL, 0, NULL, 0, b, ldb);
+    if (beta[0] != ONE) {
+          printf("To call GEMM_BETA(). m=%ld, n=%ld, beta[0]=%f, ldb=%ld\n", m, n, beta[0], ldb);
+          GEMM_BETA(m, n, 0, beta[0], NULL, 0, NULL, 0, b, ldb);
+    }
     if (beta[0] == ZERO) return 0;
 #else
     if ((beta[0] != ONE) || (beta[1] != ZERO))
@@ -113,6 +117,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
   }
 
   for(js = 0; js < n; js += GEMM_R){    /* GEMM_R: 4096 */  /* Loop 1.0 */
+    printf("Loop 1.0\n");
     min_j = n - js;                      /* 把 n 列做 4096列 分割。每次处理最多 4096 列。 */
     if (min_j > GEMM_R) min_j = GEMM_R;  /* 最多处理 4096 列 数据， 假设小矩阵， min_j = n */
 
@@ -126,14 +131,17 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
     START_RPCC();
 
 #ifndef TRANSA
+    printf("To call TRMM_IUTCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
     TRMM_IUTCOPY(min_l, min_i, a, lda, 0, 0, sa);
 #else
+    printf("To call TRMM_ILNCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
     TRMM_ILNCOPY(min_l, min_i, a, lda, 0, 0, sa);
 #endif
 
     STOP_RPCC(innercost);
 
     for(jjs = js; jjs < js + min_j; jjs += min_jj){   /* Loop 2.1 */
+      printf("Loop 2.1\n");
       min_jj = min_j + js - jjs;
 #ifdef SKYLAKEX
       /* the current AVX512 s/d/c/z GEMM kernel requires n>=6*GEMM_UNROLL_N to achieve the best performance */
@@ -145,12 +153,14 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 #endif
       START_RPCC();
 
+      printf("To call GEMM_ONCOPY()\n");
       GEMM_ONCOPY(min_l, min_jj, b + (jjs * ldb) * COMPSIZE, ldb, sb + min_l * (jjs - js) * COMPSIZE);
 
       STOP_RPCC(outercost);
 
       START_RPCC();
 
+      printf("To call TRMM_KERNEL()\n");
       TRMM_KERNEL_N(min_i, min_jj, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -162,6 +172,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
 
     for(is = min_i; is < min_l; is += GEMM_P){   /* GEMM_P: 256 */
+      printf("Loop 2.2\n");
 
       min_i = min_l - is;
       if (min_i > GEMM_P) min_i = GEMM_P;
@@ -178,6 +189,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
       START_RPCC();
 
+      printf("To call TRMM_KERNEL()\n");
       TRMM_KERNEL_N(min_i, min_j, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -189,6 +201,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
     }
 
     for(ls = min_l; ls < m; ls += GEMM_Q){   /* GEMM_Q: 512 */  /* Loop 2.3 */
+      printf("Loop 2.3\n");
       min_l = m - ls;
       if (min_l > GEMM_Q) min_l = GEMM_Q;
       min_i = ls;
@@ -205,6 +218,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       STOP_RPCC(innercost);
 
       for(jjs = js; jjs < js + min_j; jjs += min_jj){     /* Loop 3.1 */
+      printf("Loop 3.1\n");
 	min_jj = min_j + js - jjs;
 #ifdef SKYLAKEX
 	/* the current AVX512 s/d/c/z GEMM kernel requires n>=6*GEMM_UNROLL_N to achieve the best performance */
@@ -216,12 +230,14 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 #endif
 	START_RPCC();
 
+        printf("To call GEMM_ONCOPY()\n");
 	GEMM_ONCOPY(min_l, min_jj, b + (ls + jjs * ldb) * COMPSIZE, ldb, sb + min_l * (jjs - js) * COMPSIZE);
 
 	STOP_RPCC(gemmcost);
 
 	START_RPCC();
 
+        printf("To call GEMM_KERNEL()\n");
 	GEMM_KERNEL(min_i, min_jj, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -233,6 +249,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       }
 
       for(is = min_i; is < ls; is += GEMM_P){  /* Loop 3.2 */
+      printf("Loop 3.2\n");
 	min_i = ls - is;
 	if (min_i > GEMM_P) min_i = GEMM_P;
 
@@ -248,6 +265,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
 	START_RPCC();
 
+      printf("To call GEMM_KERNEL()\n");
 	GEMM_KERNEL(min_i, min_j, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -258,6 +276,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       }
 
       for(is = ls; is < ls + min_l; is += GEMM_P){   /* Loop 3.3 */
+      printf("Loop 3.3\n");
 	min_i = ls + min_l - is;
 	if (min_i > GEMM_P) min_i = GEMM_P;   /* GEMM_P, 256 */
 
@@ -273,6 +292,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
 	START_RPCC();
 
+        printf("To call TRMM_KERNEL()\n");
 	TRMM_KERNEL_N(min_i, min_j, min_l, dp1,
 #ifdef COMPLEX
 		      ZERO,
@@ -292,14 +312,17 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
     START_RPCC();
 
 #ifndef TRANSA
+    printf("To call TRMM_ILTCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
     TRMM_ILTCOPY(min_l, min_i, a, lda, m - min_l, m - min_l, sa);
 #else
+    printf("To call TRMM_IUNCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
     TRMM_IUNCOPY(min_l, min_i, a, lda, m - min_l, m - min_l, sa);
 #endif
 
     STOP_RPCC(innercost);
 
-    for(jjs = js; jjs < js + min_j; jjs += min_jj){
+    for(jjs = js; jjs < js + min_j; jjs += min_jj){  /* Loop 2.1 */
+      printf("Loop E 2.1\n");
       min_jj = min_j + js - jjs;
 #ifdef SKYLAKEX
       /* the current AVX512 s/d/c/z GEMM kernel requires n>=6*GEMM_UNROLL_N to achieve the best performance */
@@ -310,7 +333,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
         if (min_jj > GEMM_UNROLL_N) min_jj = GEMM_UNROLL_N;
 #endif
       START_RPCC();
-
+      printf("To call GEMM_ONCOPY(), min_l=%ld, min_jj=%ld, ldb=%ld\n", min_l, min_jj, ldb);
       GEMM_ONCOPY(min_l, min_jj, b + (m - min_l + jjs * ldb) * COMPSIZE, ldb,
 		  sb + min_l * (jjs - js) * COMPSIZE);
 
@@ -318,6 +341,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
       START_RPCC();
 
+      printf("To call TRMM_KERNEL_T(), min_i=%ld, min_jj=%ld, min_l=%ld, ldb=%ld, offset=0\n", min_i, min_jj, min_l, ldb);
       TRMM_KERNEL_T(min_i, min_jj, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -328,15 +352,18 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       STOP_RPCC(trmmcost);
     }
 
-    for(is = m - min_l + min_i; is < m; is += GEMM_P){
+    for(is = m - min_l + min_i; is < m; is += GEMM_P){ /* Loop 2.2 */
+      printf("Loop E 2.2\n");
       min_i = m - is;
       if (min_i > GEMM_P) min_i = GEMM_P;
 
       START_RPCC();
 
 #ifndef TRANSA
+      printf("To call TRMM_ILTCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
       TRMM_ILTCOPY(min_l, min_i, a, lda, m - min_l, is, sa);
 #else
+      printf("To call TRMM_IUNCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
       TRMM_IUNCOPY(min_l, min_i, a, lda, m - min_l, is, sa);
 #endif
 
@@ -344,6 +371,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
       START_RPCC();
 
+      printf("To call TRMM_KERNEL_T(), min_i=%ld, min_j=%ld, min_l=%ld, ldb=%ld, offset=%ld\n", min_i, min_j, min_l, ldb, is -m + min_l);
       TRMM_KERNEL_T(min_i, min_j, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -353,7 +381,8 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       STOP_RPCC(trmmcost);
     }
 
-    for(ls = m - min_l; ls > 0; ls -= GEMM_Q){
+    for(ls = m - min_l; ls > 0; ls -= GEMM_Q){ /* Loop 2.3 */
+      printf("Loop E 2.3 \n");
       min_l = ls;
       if (min_l > GEMM_Q) min_l = GEMM_Q;
       min_i = min_l;
@@ -362,14 +391,18 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       START_RPCC();
 
 #ifndef TRANSA
+      printf("To call TRMM_ILTCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
       TRMM_ILTCOPY(min_l, min_i, a, lda, ls - min_l, ls - min_l, sa);
 #else
+      printf("To call TRMM_IUNCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
       TRMM_IUNCOPY(min_l, min_i, a, lda, ls - min_l, ls - min_l, sa);
 #endif
 
       STOP_RPCC(innercost);
 
-      for(jjs = js; jjs < js + min_j; jjs += min_jj){
+      for(jjs = js; jjs < js + min_j; jjs += min_jj){ /* Loop 3.1 */
+	printf("Loop E 3.1\n");
+
 	min_jj = min_j + js - jjs;
 #ifdef SKYLAKEX
 	/* the current AVX512 s/d/c/z GEMM kernel requires n>=6*GEMM_UNROLL_N to achieve the best performance */
@@ -380,7 +413,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 	  if (min_jj > GEMM_UNROLL_N) min_jj = GEMM_UNROLL_N;
 #endif
 	START_RPCC();
-
+        printf("To call GEMM_ONCOPY()\n");
 	GEMM_ONCOPY(min_l, min_jj, b + (ls - min_l + jjs * ldb) * COMPSIZE, ldb,
 		    sb + min_l * (jjs - js) * COMPSIZE);
 
@@ -388,6 +421,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
 	START_RPCC();
 
+        printf("To call TRMM_KERNEL_T(), min_i=%ld, min_jj=%ld, min_l=%ld, ldb=%ld, offset=%ld\n", min_i, min_jj, min_l, ldb, (long int)0);
 	TRMM_KERNEL_T(min_i, min_jj, min_l, dp1,
 #ifdef COMPLEX
 		      ZERO,
@@ -398,15 +432,18 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 	STOP_RPCC(trmmcost);
       }
 
-      for(is = ls - min_l + min_i; is < ls; is += GEMM_P){
+      for(is = ls - min_l + min_i; is < ls; is += GEMM_P){ /* Loop 3.2 */
+	printf("Loop E 3.2\n");
 	min_i = ls - is;
 	if (min_i > GEMM_P) min_i = GEMM_P;
 
 	START_RPCC();
 
 #ifndef TRANSA
+        printf("To call TRMM_ILTCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
 	TRMM_ILTCOPY(min_l, min_i, a, lda, ls - min_l, is, sa);
 #else
+        printf("To call TRMM_IUNCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
 	TRMM_IUNCOPY(min_l, min_i, a, lda, ls - min_l, is, sa);
 #endif
 
@@ -414,6 +451,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
 	START_RPCC();
 
+        printf("To call TRMM_KERNEL_T(), min_i=%ld, min_j=%ld, min_l=%ld, ldb=%ld, offset=%ld \n", min_i, min_j, min_l, ldb, is -ls + min_l);
 	TRMM_KERNEL_T(min_i, min_j, min_l, dp1,
 #ifdef COMPLEX
 		      ZERO,
@@ -424,15 +462,19 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       }
 
 
-      for(is = ls; is < m; is += GEMM_P){
+      for(is = ls; is < m; is += GEMM_P){ /* Loop 3.3 */
+	printf("Loop E 3.3\n");
+
 	min_i = m - is;
 	if (min_i > GEMM_P) min_i = GEMM_P;
 
 	START_RPCC();
 
 #ifndef TRANSA
+        printf("To call GEMM_ITCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
 	GEMM_ITCOPY(min_l, min_i, a + (is + (ls - min_l) * lda) * COMPSIZE, lda, sa);
 #else
+        printf("To call GEMM_INCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
 	GEMM_INCOPY(min_l, min_i, a + ((ls - min_l) + is * lda) * COMPSIZE, lda, sa);
 #endif
 
@@ -440,6 +482,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
 	START_RPCC();
 
+        printf("To call GEMM_KERNEL()\n");
 	GEMM_KERNEL(min_i, min_j, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -456,6 +499,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 
 #ifdef TIMING
   total = (double)outercost + (double)innercost + (double)gemmcost + (double)trmmcost;
+
 
   printf( "Copy A : %5.2f Copy  B: %5.2f  GEMM Kernel : %5.2f  TRMM Kerlnel : %5.2f   kernel Effi. : %5.2f Total Effi. : %5.2f\n",
 	  innercost / total * 100., outercost / total * 100.,

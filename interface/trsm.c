@@ -253,7 +253,7 @@ void CNAME(enum CBLAS_ORDER order,
 #endif
 #endif
 #endif
-
+  printf("Enter cblas interface %s()\n", __func__);
   PRINT_DEBUG_CNAME;
 
   args.a = (void *)a;
