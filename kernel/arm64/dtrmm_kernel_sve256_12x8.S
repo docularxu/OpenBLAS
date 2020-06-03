@@ -57,32 +57,14 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define pCRow6		x23
 #define pCRow7		x24
 
-#define alpha0		d10
-#define alphaV0		v10.d[0]
-
+/* TODO: adjust these numbers when tuning */
 #define A_PRE_SIZE	2560
 #define B_PRE_SIZE	448
 #define C_PRE_SIZE	128
 
-// 00 origM
-// 01 origN
-// 02 origK
-// 03 origPA
-// 04 origPB
-// 05 pC
-// 06 origLDC -> LDC
-// 07 offset
-// 08 counterL
-// 09 counterI
-// 10 counterJ
-// 11 pB
-// 12 pCRow0
-// 13 pCRow1
-// 14 pCRow2
-// 15 pA
-// 16 temp
-// 17 tempOffset
-// 18 must save tempK
+#include "dtrmm_common_sve256.h"
+
+// 18 must save temp
 // 19 must save
 // 20 must save
 // 21 must save
@@ -97,42 +79,61 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 30 link
 // 31 sp
 
-//v00 ALPHA -> pA0_0, pA0_1
-//v01 pA0_2, pA0_3
-//v02 pA0_4, pA0_5
-//v03 pA0_6, pA0_7
-//v04 pA1_0, pA1_1
-//v05 pA1_2, pA1_3
-//v06 pA1_4, pA1_5
-//v07 pA1_6, pA1_7
-//v08 must save pB0_0
-//v09 must save pB0_1
-//v10 must save pB0_2 --> ALPHA0
-//v11 must save pB0_3
-//v12 must save pB1_0
-//v13 must save pB1_1
-//v14 must save pB1_2
-//v15 must save pB1_3
-//v16 must save C00, C01
-//v17 must save C02, C03
-//v18 C04, C05
-//v19 C06, C07
-//v20 C10, C11
-//v21 C12, C13
-//v22 C14, C15
-//v23 C16, C17
-//v24 C20, C21
-//v25 C22, C23
-//v26 C24, C25
-//v27 C26, C27
-//v28 C30, C31
-//v29 C32, C33
-//v30 C34, C35
-//v31 C36, C37
+//v08 must save
+//v09 must save
+//v10 must save
+//v11 must save
+//v12 must save
+//v13 must save
+//v14 must save
+//v15 must save
+//v16 must save
+//v17 must save
 
 /*******************************************************************************
 * Macro definitions
 *******************************************************************************/
+
+/******************************************************************************
+ * L8
+ ******************************************************************************/
+
+.macro INIT12x8
+	/* set z8 ~ z31 to zero */
+        mov     z8.d,  #0
+        mov     z9.d,  #0
+        mov     z10.d, #0
+        mov     z11.d, #0
+
+        mov     z12.d, #0
+        mov     z13.d, #0
+        mov     z14.d, #0
+        mov     z15.d, #0
+
+        mov     z16.d, #0
+        mov     z17.d, #0
+        mov     z18.d, #0
+        mov     z19.d, #0
+
+/* TODO: we can use the other vector elements to init other vectors
+ *      Eg. 'dup z20.d, z16.d[0]' to initilize z20?
+ *       Question is: will that be more efficient than using 'mov z20.d, #0'?
+ */
+        mov     z20.d, #0
+        mov     z21.d, #0
+        mov     z22.d, #0
+        mov     z23.d, #0
+
+        mov     z24.d, #0
+        mov     z25.d, #0
+        mov     z26.d, #0
+        mov     z27.d, #0
+
+        mov     z28.d, #0
+        mov     z29.d, #0
+        mov     z30.d, #0
+        mov     z31.d, #0
+.endm
 
 /* Input:
  *   pA: address of loading from *a
@@ -208,7 +209,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmul  z28.d, z2.d, z7.d[0]           //
 	fmul  z30.d, z1.d, z7.d[1]           //
 	fmul  z31.d, z2.d, z7.d[1]           //
-	ldr  z1, [pA, #4, MUL VL]            // load a(  4:7, l )
+	ldr  z1, [pA, #4, MUL VL]            // load a(  4:7, l+1 )
 .endm
 
 .macro KERNEL12x8_M2
@@ -370,6 +371,844 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmla  z31.d, z0.d, z7.d[1]           //
 .endm
 
+/* Input:
+ *   pA: address of loading from *a
+ *   pB: address of loading from *b
+ *   p0.d: all true predicate register
+ * Vector registers planning:
+ *   z8 ~ z31  : c
+ *   z0 ~ z2   : a
+ *   z4 ~ z7   : b
+ *   z3        : free, used in loop unrolling
+ * Output:
+ *   z8 ~ z31          : updated c
+ *   pA: pointing to next elements of *a
+ *   pB: pointing to next elements of *b
+ */
+.macro KERNEL12x8_SUB
+	/* load a */
+	ldr  z0, [pA]                        // load a(  0:3, l )
+	/* load b */
+	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
+
+	fmla  z8.d,  z0.d, z4.d[0]           //
+	fmla  z11.d, z0.d, z4.d[1]           //
+	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+
+	fmla  z9.d,  z1.d, z4.d[0]           //
+	fmla  z12.d, z1.d, z4.d[1]           //
+	ldr  z2, [pA, #2, MUL VL]            // load a(  8:11,l )
+
+	fmla  z10.d, z2.d, z4.d[0]           //
+	fmla  z13.d, z2.d, z4.d[1]           //
+	ld1rqd  {z5.d}, p0/z, [pB, #16]      // load b( l,2:3 )
+
+	fmla  z14.d, z0.d, z5.d[0]           //
+	fmla  z17.d, z0.d, z5.d[1]           //
+	fmla  z15.d, z1.d, z5.d[0]           //
+	ld1rqd  {z6.d}, p0/z, [pB, #32]      // load b( l,4:5 )
+
+	fmla  z18.d, z1.d, z5.d[1]           //
+	fmla  z16.d, z2.d, z5.d[0]           //
+	fmla  z19.d, z2.d, z5.d[1]           //
+	ld1rqd  {z7.d}, p0/z, [pB, #48]      // load b( l,6:7 )
+
+	fmla  z20.d, z0.d, z6.d[0]           //
+	fmla  z21.d, z1.d, z6.d[0]           //
+	fmla  z22.d, z2.d, z6.d[0]           //
+        /* adjust pA */
+        add pA, pA, #96                      // 96 = 3 * (MUL VL) = 12 * sizeof(double)
+
+	fmla  z23.d, z0.d, z6.d[1]           //
+	fmla  z24.d, z1.d, z6.d[1]           //
+	fmla  z25.d, z2.d, z6.d[1]           //
+        /* adjust pB */
+        add pB, pB, #64                      // 64 = 8 * sizeof(double)
+
+	fmla  z26.d, z0.d, z7.d[0]           //
+	fmla  z27.d, z1.d, z7.d[0]           //
+	fmla  z28.d, z2.d, z7.d[0]           //
+
+	fmla  z29.d, z0.d, z7.d[1]           //
+	fmla  z30.d, z1.d, z7.d[1]           //
+	fmla  z31.d, z2.d, z7.d[1]           //
+.endm
+
+/* SAVE12x8
+ * Input:
+ *   alpha     : alpha, in scalar register
+ *   z8 ~ z31  : c
+ *   pCRow0, pCRow1, pCRow2, pCRow3,
+ *   pCRow4, pCRow5, pCRow6, pCRow7:  pointer to next position in *c each Column
+ * Progress:
+ *   z7         : alpha duplicated into vector
+ *   z0 ~ z5    : for storing alpha-multiplied result
+ * TODO: double check prfm
+ *   prfm L2    : prefetch before 'str'.
+ *                Instead of ‘PLD', use 'PST' for store
+ */
+.macro SAVE12x8
+	/* duplicate alpha to z7 */
+	dup 	z7.d, alpha
+
+	/* c Column 0 */
+	prfm	PSTL2KEEP, [pCRow0, #C_PRE_SIZE]
+	fmul	z0.d, z8.d,  z7.d		// scale by alpha
+	fmul	z1.d, z9.d,  z7.d
+	fmul	z2.d, z10.d, z7.d
+	str 	z0, [pCRow0]
+	str 	z1, [pCRow0, #1, MUL VL]
+	str 	z2, [pCRow0, #2, MUL VL]
+	add	pCRow0, pCRow0, #96		// 96 = 12 * sizeof(double)
+
+/* TODO: consider interleaving 'fmul' and 'str' for better pipelining */
+	/* c Column 1 */
+	prfm	PSTL2KEEP, [pCRow1, #C_PRE_SIZE]
+	fmul	z3.d, z11.d, z7.d		// scale by alpha
+	fmul	z4.d, z12.d, z7.d
+	fmul	z5.d, z13.d, z7.d
+	str 	z3, [pCRow1]
+	str 	z4, [pCRow1, #1, MUL VL]
+	str 	z5, [pCRow1, #2, MUL VL]
+	add	pCRow1, pCRow1, #96
+
+	/* c Column 2 */
+	prfm	PSTL2KEEP, [pCRow2, #C_PRE_SIZE]
+	fmul	z0.d, z14.d, z7.d		// scale by alpha
+	fmul	z1.d, z15.d, z7.d
+	fmul	z2.d, z16.d, z7.d
+	str 	z0, [pCRow2]
+	str 	z1, [pCRow2, #1, MUL VL]
+	str 	z2, [pCRow2, #2, MUL VL]
+	add	pCRow2, pCRow2, #96
+
+	/* c Column 3 */
+	prfm	PSTL2KEEP, [pCRow3, #C_PRE_SIZE]
+	fmul	z3.d, z17.d, z7.d		// scale by alpha
+	fmul	z4.d, z18.d, z7.d
+	fmul	z5.d, z19.d, z7.d
+	str 	z3, [pCRow3]
+	str 	z4, [pCRow3, #1, MUL VL]
+	str 	z5, [pCRow3, #2, MUL VL]
+	add	pCRow3, pCRow3, #96
+
+	/* c Column 4 */
+	prfm	PSTL2KEEP, [pCRow4, #C_PRE_SIZE]
+	fmul	z0.d, z20.d, z7.d		// scale by alpha
+	fmul	z1.d, z21.d, z7.d
+	fmul	z2.d, z22.d, z7.d
+	str 	z0, [pCRow4]
+	str 	z1, [pCRow4, #1, MUL VL]
+	str 	z2, [pCRow4, #2, MUL VL]
+	add	pCRow4, pCRow4, #96
+
+	/* c Column 5 */
+	prfm	PSTL2KEEP, [pCRow5, #C_PRE_SIZE]
+	fmul	z3.d, z23.d, z7.d		// scale by alpha
+	fmul	z4.d, z24.d, z7.d
+	fmul	z5.d, z25.d, z7.d
+	str 	z3, [pCRow5]
+	str 	z4, [pCRow5, #1, MUL VL]
+	str 	z5, [pCRow5, #2, MUL VL]
+	add	pCRow5, pCRow5, #96
+
+	/* c Column 6 */
+	prfm	PSTL2KEEP, [pCRow6, #C_PRE_SIZE]
+	fmul	z0.d, z26.d, z7.d		// scale by alpha
+	fmul	z1.d, z27.d, z7.d
+	fmul	z2.d, z28.d, z7.d
+	str 	z0, [pCRow6]
+	str 	z1, [pCRow6, #1, MUL VL]
+	str 	z2, [pCRow6, #2, MUL VL]
+	add	pCRow6, pCRow6, #96
+
+	/* c Column 7 */
+	prfm	PSTL2KEEP, [pCRow7, #C_PRE_SIZE]
+	fmul	z3.d, z29.d, z7.d		// scale by alpha
+	fmul	z4.d, z30.d, z7.d
+	fmul	z5.d, z31.d, z7.d
+	str 	z3, [pCRow7]
+	str 	z4, [pCRow7, #1, MUL VL]
+	str 	z5, [pCRow7, #2, MUL VL]
+	add	pCRow7, pCRow7, #96
+.endm
+
+/******************************************************************************/
+
+/* L8_M8 */
+/* c(8x8):
+ *    z8, z11, z14, z17, z20, z23, z26, z29
+ *    z9, z12, z15, z18, z21, z24, z27, z30
+ */
+.macro INIT8x8
+        mov     z8.d,  #0
+        mov     z9.d,  #0
+
+        mov     z11.d, #0
+        mov     z12.d, #0
+
+        mov     z14.d, #0
+        mov     z15.d, #0
+
+        mov     z17.d, #0
+        mov     z18.d, #0
+
+        mov     z20.d, #0
+        mov     z21.d, #0
+
+/* TODO: we can use 'dup z20.d, z16.d[0]' to initilize the other vectors.
+ *       Question is: will that be more efficient than using 'mov z20.d, #0'?
+ */
+        mov     z23.d, #0
+        mov     z24.d, #0
+
+        mov     z26.d, #0
+        mov     z27.d, #0
+
+        mov     z29.d, #0
+        mov     z30.d, #0
+.endm
+
+/* Input:
+ *   pA: address of next element of *a
+ *   pB: address of next element of *b
+ * Vector registers:
+ *
+ *   z0, z1        : a
+ *   z4, z5, z6, z7: b
+ */
+ .macro KERNEL8x8_SUB
+	/* load a */
+	ldr  z0, [pA]                        // load a(  0:3, l )
+	/* load b */
+	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
+
+	fmla  z8.d,  z0.d, z4.d[0]           //
+	fmla  z11.d, z0.d, z4.d[1]           //
+	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+
+	fmla  z9.d,  z1.d, z4.d[0]           //
+	fmla  z12.d, z1.d, z4.d[1]           //
+	ld1rqd  {z5.d}, p0/z, [pB, #16]      // load b( l,2:3 )
+
+	fmla  z14.d, z0.d, z5.d[0]           //
+	fmla  z17.d, z0.d, z5.d[1]           //
+	fmla  z15.d, z1.d, z5.d[0]           //
+	ld1rqd  {z6.d}, p0/z, [pB, #32]      // load b( l,4:5 )
+
+	fmla  z18.d, z1.d, z5.d[1]           //
+	fmla  z20.d, z0.d, z6.d[0]           //
+	fmla  z21.d, z1.d, z6.d[0]           //
+	ld1rqd  {z7.d}, p0/z, [pB, #48]      // load b( l,6:7 )
+        /* adjust pA */
+        add pA, pA, #64                      // 64 = 2 * (MUL VL) = 8 * sizeof(double)
+
+	fmla  z23.d, z0.d, z6.d[1]           //
+	fmla  z24.d, z1.d, z6.d[1]           //
+	fmla  z26.d, z0.d, z7.d[0]           //
+        /* adjust pB */
+        add pB, pB, #64                      // 64 = 8 * sizeof(double)
+
+	fmla  z27.d, z1.d, z7.d[0]           //
+	fmla  z29.d, z0.d, z7.d[1]           //
+	fmla  z30.d, z1.d, z7.d[1]           //
+.endm
+
+/* SAVE8x8
+ * Input:
+ *   alpha      : alpha, in scalar register
+ *   z8 ~ z31   : c
+ *   pCRow0     : pointer to next position in *c Column 0
+ * Progress:
+ *   pCRow1, pCRow2, pCRow3,
+ *   pCRow4, pCRow5, pCRow6, pCRow7:  pointer to next position in *c each Column
+ *   z7         : alpha duplicated into vector
+ *   z0, z1,
+ *   z3, z4     : for storing alpha-multiplied result
+ * Output:
+ *   pCRow0     : is adjusted to point to next
+ */
+.macro SAVE8x8
+	/* duplicate alpha to z7 */
+	dup 	z7.d, alpha
+
+	/* c Column 0 */
+	fmul	z0.d, z8.d,  z7.d		// scale by alpha
+	fmul	z1.d, z9.d,  z7.d
+	str 	z0, [pCRow0]
+	str 	z1, [pCRow0, #1, MUL VL]
+
+	/* c Column 1 */
+	add	pCRow1, pCRow0, LDC
+	fmul	z3.d, z11.d, z7.d		// scale by alpha
+	fmul	z4.d, z12.d, z7.d
+	str 	z3, [pCRow1]
+	str 	z4, [pCRow1, #1, MUL VL]
+
+	/* c Column 2 */
+	add	pCRow2, pCRow1, LDC
+	fmul	z0.d, z14.d, z7.d		// scale by alpha
+	fmul	z1.d, z15.d, z7.d
+	str 	z0, [pCRow2]
+	str 	z1, [pCRow2, #1, MUL VL]
+
+	/* c Column 3 */
+	add	pCRow3, pCRow2, LDC
+	fmul	z3.d, z17.d, z7.d		// scale by alpha
+	fmul	z4.d, z18.d, z7.d
+	str 	z3, [pCRow3]
+	str 	z4, [pCRow3, #1, MUL VL]
+
+	/* c Column 4 */
+	add	pCRow4, pCRow3, LDC
+	fmul	z0.d, z20.d, z7.d		// scale by alpha
+	fmul	z1.d, z21.d, z7.d
+	str 	z0, [pCRow4]
+	str 	z1, [pCRow4, #1, MUL VL]
+
+	/* c Column 5 */
+	add	pCRow5, pCRow4, LDC
+	fmul	z3.d, z23.d, z7.d		// scale by alpha
+	fmul	z4.d, z24.d, z7.d
+	str 	z3, [pCRow5]
+	str 	z4, [pCRow5, #1, MUL VL]
+
+	/* c Column 6 */
+	fmul	z0.d, z26.d, z7.d		// scale by alpha
+	fmul	z1.d, z27.d, z7.d
+	str 	z0, [pCRow6]
+	str 	z1, [pCRow6, #1, MUL VL]
+
+	/* c Column 7 */
+	add	pCRow7, pCRow6, LDC
+	fmul	z3.d, z29.d, z7.d		// scale by alpha
+	fmul	z4.d, z30.d, z7.d
+	str 	z3, [pCRow7]
+	str 	z4, [pCRow7, #1, MUL VL]
+
+	/* adjust pCRow0 */
+	add	pCRow0, pCRow0, #64		// 64 = 8 * sizeof(double)
+.endm
+
+/******************************************************************************/
+
+/* L8_M4 */
+/* c(4x8):
+ *    z8, z11, z14, z17, z20, z23, z26, z29
+ */
+.macro INIT4x8
+        mov     z8.d,  #0
+        mov     z11.d, #0
+        mov     z14.d, #0
+        mov     z17.d, #0
+
+/* TODO: we can use 'dup z20.d, z16.d[0]' to initilize the other vectors.
+ *       Question is: will that be more efficient than using 'mov z20.d, #0'?
+ */
+        mov     z20.d, #0
+        mov     z23.d, #0
+        mov     z26.d, #0
+        mov     z29.d, #0
+.endm
+
+/* Input:
+ *   pA: address of next element of *a
+ *   pB: address of next element of *b
+ * Vector registers:
+ *   z0            : a
+ *   z4, z5, z6, z7: b
+ */
+ .macro KERNEL4x8_SUB
+	/* load a */
+	ldr  z0, [pA]                        // load a(  0:3, l )
+	/* load b */
+	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
+
+	fmla  z8.d,  z0.d, z4.d[0]           //
+	fmla  z11.d, z0.d, z4.d[1]           //
+	ld1rqd  {z5.d}, p0/z, [pB, #16]      // load b( l,2:3 )
+
+	fmla  z14.d, z0.d, z5.d[0]           //
+	fmla  z17.d, z0.d, z5.d[1]           //
+	ld1rqd  {z6.d}, p0/z, [pB, #32]      // load b( l,4:5 )
+
+	fmla  z20.d, z0.d, z6.d[0]           //
+	fmla  z23.d, z0.d, z6.d[1]           //
+	ld1rqd  {z7.d}, p0/z, [pB, #48]      // load b( l,6:7 )
+        /* adjust pA */
+        add pA, pA, #32                      // 32 = 4 * sizeof(double)
+
+	fmla  z26.d, z0.d, z7.d[0]           //
+	fmla  z29.d, z0.d, z7.d[1]           //
+        /* adjust pB */
+        add pB, pB, #64                      // 64 = 8 * sizeof(double)
+
+.endm
+
+/* SAVE4x8
+ * Input:
+ *   alpha      : alpha, in scalar register
+ *   z8 ~ z31   : c
+ *   pCRow0     : pointer to next position in *c Column 0
+ * Progress:
+ *   pCRow1, pCRow2, pCRow3,
+ *   pCRow4, pCRow5, pCRow6, pCRow7:  pointer to next position in *c each Column
+ *   z7         : alpha duplicated into vector
+ *   z0
+ *   z3         : for storing alpha-multiplied result
+ * Output:
+ *   pCRow0     : is adjusted to point to next
+ */
+.macro SAVE4x8
+	/* duplicate alpha to z7 */
+	dup 	z7.d, alpha
+
+	/* c Column 0 */
+	fmul	z0.d, z8.d,  z7.d		// scale by alpha
+	str 	z0, [pCRow0]
+
+	/* c Column 1 */
+	add	pCRow1, pCRow0, LDC
+	fmul	z3.d, z11.d, z7.d		// scale by alpha
+	str 	z3, [pCRow1]
+
+	/* c Column 2 */
+	add	pCRow2, pCRow1, LDC
+	fmul	z0.d, z14.d, z7.d		// scale by alpha
+	str 	z0, [pCRow2]
+
+	/* c Column 3 */
+	add	pCRow3, pCRow2, LDC
+	fmul	z3.d, z17.d, z7.d		// scale by alpha
+	str 	z3, [pCRow3]
+
+	/* c Column 4 */
+	add	pCRow4, pCRow3, LDC
+	fmul	z0.d, z20.d, z7.d		// scale by alpha
+	str 	z0, [pCRow4]
+
+	/* c Column 5 */
+	add	pCRow5, pCRow4, LDC
+	fmul	z3.d, z23.d, z7.d		// scale by alpha
+	str 	z3, [pCRow5]
+
+	/* c Column 6 */
+	fmul	z0.d, z26.d, z7.d		// scale by alpha
+	str 	z0, [pCRow6]
+
+	/* c Column 7 */
+	add	pCRow7, pCRow6, LDC
+	fmul	z3.d, z29.d, z7.d		// scale by alpha
+	str 	z3, [pCRow7]
+
+	/* adjust pCRow0 */
+	add	pCRow0, pCRow0, #32		// 32 = 4 * sizeof(double)
+.endm
+
+/******************************************************************************/
+
+/* L8_M2 */
+/* c(2x8):
+ *   z16, z17   : c( 0,0:7 )
+ *   z20, z21   : c( 1,0:7 )
+ */
+.macro INIT2x8
+        mov     z16.d, #0
+        mov     z20.d, #0
+        mov     z17.d, #0
+        mov     z21.d, #0
+.endm
+
+/* Input:
+ *   pA: address of next element of *a
+ *   pB: address of next element of *b
+ *   p0    : predicate register, all true
+ * Vector registers:
+ *   z0        : a( 0:1,l )  // col. l
+ *   z4, z5    : b( l,0:7 )  // row  l
+ */
+.macro KERNEL2x8_SUB
+	/* load a */
+	ld1rqd  {z0.d}, p0/z, [pA]           // load a( 0,0:1 )
+	/* load b */
+	ldr  z4, [pB]                        // load b( l,0:3 )
+
+	fmla  z16.d, z4.d, z0.d[0]           //
+	fmla  z20.d, z4.d, z0.d[1]           //
+	ldr  z5, [pB, #1, MUL VL]            // load b( l,4:7 )
+        /* adjust pA */
+        add pA, pA, #16                      // 16 = 2 * sizeof(double)
+
+	fmla  z17.d, z5.d, z0.d[0]           //
+	fmla  z21.d, z5.d, z0.d[1]           //
+        /* adjust pB */
+        add pB, pB, #64                      // 32 = 8 * sizeof(double)
+.endm
+
+/* SAVE2x8
+ * Input:
+ *   p0    : predicate register, all true
+ *   pCRow0      : pointer to next position in *c Column 0
+ * Progress:
+ *   z7          : alpha duplicated into vector
+ *   z0,z1, z4,z5: for storing alpha-multiplied result
+ *   z2,z3       : index, scatter store addr.
+ * Output:
+ *   pCRow0     : is adjusted to point to next
+ */
+.macro SAVE2x8
+	/* duplicate alpha to z7 */
+	dup 	z7.d, alpha
+
+	index	z2.d, pCRow0, LDC               // pointers of [pCRow0, pCRow1, pCRow2, pCRow3]
+	fmul	z0.d, z16.d, z7.d               // scale by alpha
+	fmul	z4.d, z20.d, z7.d
+        /* scatter store */
+	st1d	z0.d, p0, [z2.d]                // store c( 0,0:3 )
+	st1d	z4.d, p0, [z2.d, #8]            // store c( 1,0:3 )
+
+	add 	pCRow4, pCRow0, LDC, lsl #2	// pCRow4 = PCRow0 + 4*LDC
+	index	z3.d, pCRow4, LDC               // pointers of [pCRow4, pCRow5, pCRow6, pCRow7]
+	fmul	z1.d, z17.d, z7.d
+	fmul	z5.d, z21.d, z7.d
+        /* scatter store */
+	st1d	z1.d, p0, [z3.d]                // store c( 0,4:7 )
+	st1d	z5.d, p0, [z3.d, #8]            // store c( 1,4:7 )
+
+	add	pCRow0, pCRow0, #16             // pCRow0 moved down 2*sizeof(double)
+.endm
+
+/******************************************************************************/
+
+/* L8_M1 */
+/* c(1x8):
+ *   z16, z17   : c( 0,0:7 )
+ */
+.macro INIT1x8
+        mov     z16.d, #0
+        mov     z17.d, #0
+.endm
+
+/* Input:
+ *   pA: address of next element of *a
+ *   pB: address of next element of *b
+ *   p0    : predicate register, all true
+ * Vector registers:
+ *   z0        : a( 0,l )  // col. l
+ *   z4, z5    : b( l,0:7 )  // row  l
+ */
+.macro KERNEL1x8_SUB
+	/* load a */
+	ld1rd  {z0.d}, p0/z, [pA]            // load a( 0,l )
+	/* load b */
+	ldr  z4, [pB]                        // load b( l,0:3 )
+
+	fmla  z16.d, z4.d, z0.d[0]
+	ldr  z5, [pB, #1, MUL VL]            // load b( l,4:7 )
+        /* adjust pA */
+        add pA, pA, #8                       // 8 = 1 * sizeof(double)
+
+	fmla  z17.d, z5.d, z0.d[0]
+        /* adjust pB */
+        add pB, pB, #64                      // 32 = 8 * sizeof(double)
+.endm
+
+/* SAVE1x8
+ * Input:
+ *   p0    : predicate register, all true
+ *   pCRow0      : pointer to next position in *c Column 0
+ * Progress:
+ *   z7          : alpha duplicated into vector
+ *   z0,z1       : for storing alpha-multiplied result
+ *   z2,z3       : index, scatter store addr.
+ * Output:
+ *   pCRow0     : is adjusted to point to next
+ */
+.macro SAVE1x8
+	/* duplicate alpha to z7 */
+	dup 	z7.d, alpha
+
+	index	z2.d, pCRow0, LDC               // pointers of [pCRow0, pCRow1, pCRow2, pCRow3]
+	fmul	z0.d, z16.d, z7.d               // scale by alpha
+        /* scatter store */
+	st1d	z0.d, p0, [z2.d]                // store c( 0,0:3 )
+
+	add 	pCRow4, pCRow0, LDC, lsl #2	// pCRow4 = PCRow0 + 4*LDC
+	index	z3.d, pCRow4, LDC               // pointers of [pCRow4, pCRow5, pCRow6, pCRow7]
+	fmul	z1.d, z17.d, z7.d
+        /* scatter store */
+	st1d	z1.d, p0, [z3.d]                // store c( 0,4:7 )
+
+	/* todo: this instruction is unnecessary
+	 *       unlike previous SAVEs, SAVE1x8 is the last in L8,
+	 *       pCRow0 will be reset to pC
+	 */
+	add	pCRow0, pCRow0, #8             // pCRow0 moved down 1*sizeof(double)
+.endm
+
+/******************************************************************************/
+/* L4                                                                         */
+/******************************************************************************/
+
+/* L4_M12 */
+/* c(12x4):
+ *    z16, z20, z24, z28
+ *    z17, z21, z25, z29
+ *    z18, z22, z26, z30
+ */
+.macro INIT12x4
+        mov     z16.d, #0
+        mov     z17.d, #0
+        mov     z18.d, #0
+
+/* TODO: we can use 'dup z20.d, z16.d[0]' to initilize the other vectors.
+ *       Question is: will that be more efficient than using 'mov z20.d, #0'?
+ */
+        mov     z20.d, #0
+        mov     z21.d, #0
+        mov     z22.d, #0
+
+        mov     z24.d, #0
+        mov     z25.d, #0
+        mov     z26.d, #0
+
+        mov     z28.d, #0
+        mov     z29.d, #0
+        mov     z30.d, #0
+.endm
+
+/* Input:
+ *   pA: address of next element of *a
+ *   pB: address of next element of *b
+ * Vector registers:
+ *   z0, z1, z2 : a
+ *   z4, z5     : b
+ */
+ .macro KERNEL12x4_SUB
+	/* load a */
+	ldr  z0, [pA]                        // load a(  0:3, l )
+	/* load b */
+	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
+	fmla  z16.d, z0.d, z4.d[0]           //
+	fmla  z20.d, z0.d, z4.d[1]           //
+
+	ld1rqd  {z5.d}, p0/z, [pB, #16]      // load b( l,2:3 )
+	fmla  z24.d, z0.d, z5.d[0]           //
+	fmla  z28.d, z0.d, z5.d[1]           //
+
+        /* adjust pB */
+        add pB, pB, #32                      // 32 = 4 * sizeof(double)
+	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+	fmla  z17.d, z1.d, z4.d[0]           //
+	fmla  z21.d, z1.d, z4.d[1]           //
+	fmla  z25.d, z1.d, z5.d[0]           //
+
+	ldr  z2, [pA, #2, MUL VL]            // load a(  8:11, l )
+	fmla  z29.d, z1.d, z5.d[1]           //
+	fmla  z18.d, z2.d, z4.d[0]           //
+	fmla  z22.d, z2.d, z4.d[1]           //
+
+        /* adjust pA */
+        add pA, pA, #96                      // 96 = 3 * (MUL VL) = 12 * sizeof(double)
+	fmla  z26.d, z2.d, z5.d[0]           //
+	fmla  z30.d, z2.d, z5.d[1]           //
+.endm
+
+/* SAVE12x4
+ * Input:
+ *   z12        : alpha, and duplicated into each elements of z12
+ *   pCRow0     : pointer to next position in *c Column 0
+ * Progress:
+ *   z0, z1, z2,
+ *   z3, z4, z5            : for storing alpha-multiplied result
+ *   pCRow1, pCRow2, pCRow3: pointer to next position in *c Column 1/2/3
+ * Output:
+ *   pCRow0                : is adjusted to point to next
+ */
+.macro SAVE12x4
+	fmul	z0.d, z16.d, z12.d              // scale by alpha
+	fmul	z1.d, z17.d, z12.d
+	fmul	z2.d, z18.d, z12.d
+	str 	z0, [pCRow0]                    // store column 0
+	str 	z1, [pCRow0, #1, MUL VL]
+	str 	z2, [pCRow0, #2, MUL VL]
+
+	add	pCRow1, pCRow0, LDC
+
+	fmul	z4.d, z20.d, z12.d              // scale by alpha
+	fmul	z5.d, z21.d, z12.d
+	fmul	z6.d, z22.d, z12.d
+	str 	z4, [pCRow1]                    // store column 1
+	str 	z5, [pCRow1, #1, MUL VL]
+	str 	z6, [pCRow1, #2, MUL VL]
+
+	add	pCRow2, pCRow1, LDC
+
+	fmul	z0.d, z24.d, z12.d              // scale by alpha
+	fmul	z1.d, z25.d, z12.d
+	fmul	z2.d, z26.d, z12.d
+	str 	z0, [pCRow2]                    // store column 2
+	str 	z1, [pCRow2, #1, MUL VL]
+	str 	z2, [pCRow2, #2, MUL VL]
+
+	add	pCRow3, pCRow2, LDC
+
+	fmul	z4.d, z28.d, z12.d              // scale by alpha
+	fmul	z5.d, z29.d, z12.d
+	fmul	z6.d, z30.d, z12.d
+	str 	z4, [pCRow3]                    // store column 3
+	str 	z5, [pCRow3, #1, MUL VL]
+	str 	z6, [pCRow3, #2, MUL VL]
+
+	add	pCRow0, pCRow0, #96             // 96 = 12 * sizeof(double)
+.endm
+
+/******************************************************************************/
+/* L2                                                                         */
+/******************************************************************************/
+
+/* L2_M12 */
+/* c(12x2):
+ *    z16, z20
+ *    z17, z21
+ *    z18, z22
+ */
+.macro INIT12x2
+        mov     z16.d, #0
+        mov     z17.d, #0
+        mov     z18.d, #0
+
+/* TODO: we can use 'dup z20.d, z16.d[0]' to initilize the other vectors.
+ *       Question is: will that be more efficient than using 'mov z20.d, #0'?
+ */
+        mov     z20.d, #0
+        mov     z21.d, #0
+        mov     z22.d, #0
+.endm
+
+/* Input:
+ *   pA: address of next element of *a
+ *   pB: address of next element of *b
+ * Vector registers:
+ *   z0, z1, z2 : a
+ *   z4         : b
+ */
+ .macro KERNEL12x2_SUB
+	/* load a */
+	ldr  z0, [pA]                        // load a(  0:3, l )
+	/* load b */
+	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
+	fmla  z16.d, z0.d, z4.d[0]           //
+	fmla  z20.d, z0.d, z4.d[1]           //
+
+        /* adjust pB */
+        add pB, pB, #16                      // 16 = 2 * sizeof(double)
+	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+	fmla  z17.d, z1.d, z4.d[0]           //
+	fmla  z21.d, z1.d, z4.d[1]           //
+
+	ldr  z2, [pA, #2, MUL VL]            // load a(  8:11, l )
+	fmla  z18.d, z2.d, z4.d[0]           //
+	fmla  z22.d, z2.d, z4.d[1]           //
+
+        /* adjust pA */
+        add pA, pA, #96                      // 96 = 3 * (MUL VL) = 12 * sizeof(double)
+.endm
+
+/* SAVE12x2
+ * Input:
+ *   z12        : alpha, and duplicated into each elements of z12
+ *   pCRow0     : pointer to next position in *c Column 0
+ * Progress:
+ *   z0, z1, z2,
+ *   z4, z5, z6            : for storing alpha-multiplied result
+ *   pCRow1                : pointer to next position in *c Column 1/2/3
+ * Output:
+ *   pCRow0                : is adjusted to point to next
+ */
+.macro SAVE12x2
+	fmul	z0.d, z16.d, z12.d              // scale by alpha
+	fmul	z1.d, z17.d, z12.d
+	fmul	z2.d, z18.d, z12.d
+	str 	z0, [pCRow0]                    // store column 0
+	str 	z1, [pCRow0, #1, MUL VL]
+	str 	z2, [pCRow0, #2, MUL VL]
+
+	add	pCRow1, pCRow0, LDC
+
+	fmul	z4.d, z20.d, z12.d              // scale by alpha
+	fmul	z5.d, z21.d, z12.d
+	fmul	z6.d, z22.d, z12.d
+	str 	z4, [pCRow1]                    // store column 1
+	str 	z5, [pCRow1, #1, MUL VL]
+	str 	z6, [pCRow1, #2, MUL VL]
+
+	add	pCRow0, pCRow0, #96             // 96 = 12 * sizeof(double)
+.endm
+
+/******************************************************************************
+ * L1
+ ******************************************************************************/
+
+/* L1_M12 */
+/* c(12x1):
+ *    z16
+ *    z17
+ *    z18
+ */
+.macro INIT12x1
+        mov     z16.d, #0
+        mov     z17.d, #0
+        mov     z18.d, #0
+.endm
+
+/* Input:
+ *   pA: address of next element of *a
+ *   pB: address of next element of *b
+ * Vector registers:
+ *   z0, z1, z2 : a
+ *   z4         : b
+ */
+ .macro KERNEL12x1_SUB
+	/* load a */
+	ldr  z0, [pA]                        // load a(  0:3, l )
+	/* load b */
+	ld1rd 	{z4.d}, p0/z, [pB]           // load b( l,0 )
+	fmla  z16.d, p0/m, z0.d, z4.d        //
+        /* adjust pB */
+        add   pB, pB, #8                     // 8 = 1 * sizeof(double)
+
+	ldr   z1, [pA, #1, MUL VL]           // load a(  4:7, l )
+	fmla  z17.d, p0/m, z1.d, z4.d        //
+
+	ldr  z2, [pA, #2, MUL VL]            // load a(  8:11, l )
+	fmla  z18.d, p0/m, z2.d, z4.d        //
+
+        /* adjust pA */
+        add pA, pA, #96                      // 96 = 3 * (MUL VL) = 12 * sizeof(double)
+.endm
+
+/* SAVE12x1
+ * Input:
+ *   z12        : alpha, and duplicated into each elements of z12
+ *   pCRow0     : pointer to next position in *c Column 0
+ * Progress:
+ *   z0, z1, z2            : for storing alpha-multiplied result
+ * Output:
+ *   pCRow0                : is adjusted to point to next
+ */
+.macro SAVE12x1
+	fmul	z0.d, z16.d, z12.d              // scale by alpha
+	fmul	z1.d, z17.d, z12.d
+	fmul	z2.d, z18.d, z12.d
+	str 	z0, [pCRow0]                    // store column 0
+	str 	z1, [pCRow0, #1, MUL VL]
+	str 	z2, [pCRow0, #2, MUL VL]
+
+	add	pCRow0, pCRow0, #96             // 96 = 12 * sizeof(double)
+.endm
+
+
 /*******************************************************************************
 * End of macro definitions
 *******************************************************************************/
@@ -529,7 +1368,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	ble	.Ldtrmm_kernel_L8_M12_100
 
 	.align 5
-.Ldtrmm_kernel_L4_M16_46:
+.Ldtrmm_kernel_L8_M12_46:
 
 	KERNEL12x8_SUB
 
@@ -906,6 +1745,11 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /******************************************************************************/
 
 .Ldtrmm_kernel_L4_BEGIN:   // less than 8 left in N direction
+
+	/* Starting from L4, use z12 as duplicated alpha
+	 * This is for reuse of common sve256 macros
+	 */
+	dup 	z12.d, alpha
 
 	mov	counterJ, origN
 	tst	counterJ, #7                    // 7 is (L8-1), wether L4/L2/L1 is needed.
