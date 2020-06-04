@@ -1413,6 +1413,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	mov	pB, origPB
 #else
 	mov	pB, origPB
+	/* TODO: 'lsl' and 'add' can be combined into one instruction. Eg.:
+	 *   add pA, pA, tempOffset, lsl #7
+	 * This way we can save one instruction
+	 */
 	lsl	temp, tempOffset, #7    // #7 = 2^7 = 16 * sizeof(double), where 16 is M16
 	add	pA, pA, temp            // pA moves 'tempOffset' pos. in its k dimension M8
 	lsl	temp, tempOffset, #5    // #5 = 2^5 = 4 * sizeof( double ), where 4 is L4
@@ -1625,7 +1629,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 .Ldtrmm_kernel_L4_M4_BEGIN:
-
+/* TODO: remove reduntant instruction: mov counterI, origM */
 	mov	counterI, origM
 	tst	counterI , #7                   // 7 is (M8-1)
 	ble	.Ldtrmm_kernel_L4_END           // if zero, no need to run L4_M4/M2/M1
@@ -2342,7 +2346,8 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 .Ldtrmm_kernel_L1_BEGIN:
 
-	mov	counterJ , origN
+	mov	counterJ , origN	// TODO: this instrcution is redundant
+					//    counterJ = origN since _L2_BEGIN
 	tst	counterJ , #1                   // 1 is (L2-1)
 	ble	.Ldtrmm_kernel_L999 // done     // if zero, we don't need L1
 
