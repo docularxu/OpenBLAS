@@ -769,12 +769,12 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Vector registers:
  *   z16     : c( 0,0:3 )
  *
- *   z0.d[0] : a( 0,l )                         // col. l
- *   z4      : b( l,0:3 )                       // row  l
+ *   z0.d[0] : a( 0,l )                        // col. l
+ *   z4      : b( l,0:3 )                      // row  l
  */
  .macro KERNEL1x4_SUB
 	/* load a */
-	ld1rd  {z0.d}, p0/z, [pA]                // load a( 0,0 )
+	ld1rd  {z0.d}, p0/z, [pA]              // load a( 0,0 )
 	/* load b */
 	ldr    z4, [pB]                        // load b( l,0:3 )
 
@@ -806,6 +806,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         /* scatter store */
 	st1d	z0.d, p0, [z1.d]                // store c( 0,0:3 )
 
+	/* todo: this instruction is unnecessary
+	 *       unlike previous SAVEs, SAVE1x4 is the last in L4,
+	 *       pCRow0 will be reset to pC
+	 */
 	add	pCRow0, pCRow0, #8              // pCRow0 moved down
 .endm
 
