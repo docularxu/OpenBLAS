@@ -568,7 +568,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	ld1	{v4.2d} , [pB]
 	add	pB , pB, #16
 
-	ldr	d0 , [pA]
+	ld1	{v0.d}[0], [pA]
 	add	pA, pA, #8
 
 	fmla	v16.2d, v4.2d, v0.d[0]
@@ -707,7 +707,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *   d8            : b
  */
 .macro KERNEL2x1_SUB
-	ldr	d8, [pB]
+	ld1	{v8.d}[0], [pB]
 	add	pB , pB, #8
 
 	ld1	{v0.2d}, [pA]
@@ -740,10 +740,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *   d8         : b
  */
 .macro KERNEL1x1_SUB
-	ldr	d8, [pB]
+	ld1	{v8.d}[0], [pB]
 	add	pB , pB, #8
 
-	ldr	d0, [pA]
+	ld1	{v0.d}[0], [pA]
 	add	pA , pA, #8
 
 	fmadd 	d16, d0, d8, d16  
@@ -756,7 +756,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 .macro SAVE1x1
 	fmul	d8, d16, d12
-	str 	d8, [pCRow0]
+	st1	{v8.d}[0], [pCRow0]
 
 	add	pCRow0, pCRow0, #8              // 8 = 1 * sizeof(double)
 .endm
