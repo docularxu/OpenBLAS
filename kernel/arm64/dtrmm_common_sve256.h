@@ -83,7 +83,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  .macro KERNEL8x4_SUB
 	/* load a */
-	ldr  z0, [pA]                        // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
 	fmla  z16.d, z0.d, z4.d[0]           //
@@ -92,7 +92,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmla  z20.d, z0.d, z4.d[1]           //
 	fmla  z24.d, z0.d, z5.d[0]           //
 
-	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+	ld1d  {z1.d}, p0/z, [pA, #1, MUL VL] // load a(  4:7, l )
 	fmla  z28.d, z0.d, z5.d[1]           //
 	fmla  z17.d, z1.d, z4.d[0]           //
 
@@ -125,29 +125,29 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .macro SAVE8x4
 	fmul	z0.d, z16.d, z12.d              // scale by alpha
 	fmul	z1.d, z17.d, z12.d
-	str 	z0, [pCRow0]                    // store column 0
-	str 	z1, [pCRow0, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow0]            // store column 0
+	st1d	{z1.d}, p0, [pCRow0, #1, MUL VL]
 
 	add	pCRow1, pCRow0, LDC
 
 	fmul	z4.d, z20.d, z12.d              // scale by alpha
 	fmul	z5.d, z21.d, z12.d
-	str 	z4, [pCRow1]                    // store column 1
-	str 	z5, [pCRow1, #1, MUL VL]
+	st1d	{z4.d}, p0, [pCRow1]            // store column 1
+	st1d	{z5.d}, p0, [pCRow1, #1, MUL VL]
 
 	add	pCRow2, pCRow1, LDC
 
 	fmul	z0.d, z24.d, z12.d              // scale by alpha
 	fmul	z1.d, z25.d, z12.d
-	str 	z0, [pCRow2]                    // store column 2
-	str 	z1, [pCRow2, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow2]            // store column 2
+	st1d	{z1.d}, p0, [pCRow2, #1, MUL VL]
 
 	add	pCRow3, pCRow2, LDC
 
 	fmul	z4.d, z28.d, z12.d              // scale by alpha
 	fmul	z5.d, z29.d, z12.d
-	str 	z4, [pCRow3]                    // store column 3
-	str 	z5, [pCRow3, #1, MUL VL]
+	st1d	{z4.d}, p0, [pCRow3]            // store column 3
+	st1d 	{z5.d}, p0, [pCRow3, #1, MUL VL]
 
 	add	pCRow0, pCRow0, #64             // pCRow0 moves down
 .endm
@@ -188,7 +188,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  .macro KERNEL4x4_SUB
 	/* load a */
-	ldr  z0, [pA]                        // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
 
@@ -223,22 +223,22 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 .macro SAVE4x4
 	fmul	z0.d, z16.d, z12.d              // scale by alpha
-	str 	z0, [pCRow0]                    // store column 0
+	st1d	{z0.d}, p0, [pCRow0]            // store column 0
 
 	add	pCRow1, pCRow0, LDC
 
 	fmul	z4.d, z20.d, z12.d              // scale by alpha
-	str 	z4, [pCRow1]                    // store column 1
+	st1d	{z4.d}, p0, [pCRow1]            // store column 1
 
 	add	pCRow2, pCRow1, LDC
 
 	fmul	z0.d, z24.d, z12.d              // scale by alpha
-	str 	z0, [pCRow2]                    // store column 2
+	st1d	{z0.d}, p0, [pCRow2]            // store column 2
 
 	add	pCRow3, pCRow2, LDC
 
 	fmul	z4.d, z28.d, z12.d              // scale by alpha
-	str 	z4, [pCRow3]                    // store column 3
+	st1d	{z4.d}, p0, [pCRow3]            // store column 3
 
 	add	pCRow0, pCRow0, #32            // pCRow0 moves down
 .endm
@@ -270,7 +270,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	/* load a */
 	ld1rqd  {z0.d}, p0/z, [pA]           // load a( 0,0:1 )
 	/* load b */
-	ldr  z4, [pB]                        // load b( l,0:3 )
+	ld1d  {z4.d}, p0/z, [pB]             // load b( l,0:3 )
 
 	fmla  z16.d, z4.d, z0.d[0]           //
 	fmla  z20.d, z4.d, z0.d[1]           //
@@ -331,7 +331,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	/* load a */
 	ld1rd  {z0.d}, p0/z, [pA]              // load a( 0,0 )
 	/* load b */
-	ldr    z4, [pB]                        // load b( l,0:3 )
+	ld1d   {z4.d}, p0/z, [pB]              // load b( l,0:3 )
 
 	fmla   z16.d, z4.d, z0.d[0]            //
 
@@ -400,7 +400,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  .macro KERNEL8x2_SUB
 	/* load a */
-	ldr   z0, [pA]                       // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
         /* adjust pB */
@@ -409,7 +409,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmla  z16.d, z0.d, z4.d[0]           //
 	fmla  z20.d, z0.d, z4.d[1]           //
 
-	ldr   z1, [pA, #1, MUL VL]           // load a(  4:7, l )
+	ld1d  {z1.d}, p0/z, [pA, #1, MUL VL] // load a(  4:7, l )
 	fmla  z17.d, z1.d, z4.d[0]           //
         /* adjust pA */
         add   pA, pA, #64                    // 64 = 2 * (MUL VL) = 8 * sizeof(double)
@@ -433,15 +433,15 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .macro SAVE8x2
 	fmul	z0.d, z16.d, z12.d              // scale by alpha
 	fmul	z1.d, z17.d, z12.d
-	str 	z0, [pCRow0]                    // store column 0
-	str 	z1, [pCRow0, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow0]            // store column 0
+	st1d	{z1.d}, p0, [pCRow0, #1, MUL VL]
 
 	add	pCRow1, pCRow0, LDC
 
 	fmul	z4.d, z20.d, z12.d              // scale by alpha
 	fmul	z5.d, z21.d, z12.d
-	str 	z4, [pCRow1]                    // store column 1
-	str 	z5, [pCRow1, #1, MUL VL]
+	st1d	{z4.d}, p0, [pCRow1]            // store column 1
+	st1d	{z5.d}, p0, [pCRow1, #1, MUL VL]
 
 	add	pCRow0, pCRow0, #64             // pCRow0 moves down
 .endm
@@ -469,7 +469,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  .macro KERNEL4x2_SUB
 	/* load a */
-	ldr  z0, [pA]                        // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
 
@@ -497,12 +497,12 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 .macro SAVE4x2
 	fmul	z0.d, z16.d, z12.d              // scale by alpha
-	str 	z0, [pCRow0]                    // store column 0
+	st1d	{z0.d}, p0, [pCRow0]            // store column 0
 
 	add	pCRow1, pCRow0, LDC
 
 	fmul	z4.d, z20.d, z12.d              // scale by alpha
-	str 	z4, [pCRow1]                    // store column 1
+	st1d	{z4.d}, p0, [pCRow1]            // store column 1
 
 	add	pCRow0, pCRow0, #32            // pCRow0 moves down
 .endm
@@ -613,10 +613,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  .macro KERNEL8x1_SUB
 	/* load a */
-	ldr   z0, [pA]                       // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rd 	{z4.d}, p0/z, [pB]           // load b( l,0 )
-	ldr   z1, [pA, #1, MUL VL]           // load a(  4:7, l )
+	ld1d  {z1.d}, p0/z, [pA, #1, MUL VL] // load a(  4:7, l )
 
 	fmla  z16.d, p0/m, z0.d, z4.d        //
         /* adjust pB */
@@ -638,8 +638,8 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .macro SAVE8x1
 	fmul	z0.d, z16.d, z12.d              // scale by alpha
 	fmul	z1.d, z17.d, z12.d
-	str 	z0, [pCRow0]                    // store column 0
-	str 	z1, [pCRow0, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow0]            // store column 0
+	st1d	{z1.d}, p0, [pCRow0, #1, MUL VL]
 
 	add	pCRow0, pCRow0, #64             // 8 * sizeof( double )
 .endm
@@ -665,7 +665,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  .macro KERNEL4x1_SUB
 	/* load a */
-	ldr   z0, [pA]                       // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rd 	{z4.d}, p0/z, [pB]           // load b( l,0 )
 
@@ -687,7 +687,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 .macro SAVE4x1
 	fmul	z1.d, z16.d, z12.d              // scale by alpha
-	str 	z1, [pCRow0]                    // store column 0
+	st1d	{z1.d}, p0, [pCRow0]            // store column 0
 
 	add	pCRow0, pCRow0, #32             // 4 * sizeof( double )
 .endm

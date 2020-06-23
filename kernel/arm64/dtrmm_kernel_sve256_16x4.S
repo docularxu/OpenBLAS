@@ -161,13 +161,13 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 .macro KERNEL16x4_I
 	/* load a */
-	ldr  z0, [pA]                        // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
 
 	fmul  z16.d, z0.d, z4.d[0]           //
 
-	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+	ld1d  {z1.d}, p0/z, [pA, #1, MUL VL] // load a(  4:7, l )
 	fmul  z20.d, z0.d, z4.d[1]           //
 	fmul  z17.d, z1.d, z4.d[0]           //
 
@@ -176,32 +176,27 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmul  z24.d, z0.d, z5.d[0]           //
 	fmul  z28.d, z0.d, z5.d[1]           //
 
-	ldr  z2, [pA, #2, MUL VL]            // load a(  8:11,l )
+	ld1d  {z2.d}, p0/z, [pA, #2, MUL VL] // load a(  8:11,l )
 	fmul  z25.d, z1.d, z5.d[0]           //
 	fmul  z29.d, z1.d, z5.d[1]           //
 
-	ldr  z3, [pA, #3, MUL VL]            // load a( 12:15,l )
+	ld1d  {z3.d}, p0/z, [pA, #3, MUL VL] // load a( 12:15,l )
 	fmul  z18.d, z2.d, z4.d[0]           //
 	fmul  z22.d, z2.d, z4.d[1]           //
 
 	/* load next a */
-	ldr  z6, [pA, #4, MUL VL]            // load a(  0:3, l+1 )
+	ld1d  {z6.d}, p0/z, [pA, #4, MUL VL] // load a(  0:3, l+1 )
 	fmul  z26.d, z2.d, z5.d[0]           //
 	fmul  z30.d, z2.d, z5.d[1]           //
 
 	/* load next b */
-	ld1rqd  {z10.d}, p0/z, [pB, #32]      // load b( l+1,0:1 )
+	ld1rqd  {z10.d}, p0/z, [pB, #32]     // load b( l+1,0:1 )
 	fmul  z19.d, z3.d, z4.d[0]           //
 	fmul  z23.d, z3.d, z4.d[1]           //
 
-	ld1rqd  {z11.d}, p0/z, [pB, #48]      // load b( l+1,2:3 )
+	ld1rqd  {z11.d}, p0/z, [pB, #48]     // load b( l+1,2:3 )
 	fmul  z27.d, z3.d, z5.d[0]           //
 	fmul  z31.d, z3.d, z5.d[1]           //
-
-        /* Move the following to _M2 */
-	// ldr  z7, [pA, #5, MUL VL]            // load a(  4:7, l+1 )
-	// ldr  z8, [pA, #6, MUL VL]            // load a(  8:11,l+1 )
-	// ldr  z9, [pA, #7, MUL VL]            // load a( 12:15,l+1 )
 
 .endm
 
@@ -220,20 +215,22 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Note: z3 will be load in the next iteration.
  */
 .macro KERNEL16x4_M2
-	ldr  z7, [pA, #5, MUL VL]             // load a(  4:7, l+1 )
+	ld1d  {z7.d}, p0/z, [pA, #5, MUL VL]  // load a(  4:7, l+1 )
 	fmla  z16.d, z6.d, z10.d[0]           //
 	fmla  z20.d, z6.d, z10.d[1]           //
 
-	ldr  z8, [pA, #6, MUL VL]             // load a(  8:11,l+1 )
+	ld1d  {z8.d}, p0/z, [pA, #6, MUL VL]  // load a(  8:11,l+1 )
 	fmla  z24.d, z6.d, z11.d[0]           //
 	fmla  z28.d, z6.d, z11.d[1]           //
 
-	ldr  z9, [pA, #7, MUL VL]             // load a( 12:15,l+1 )
+	ld1d  {z9.d}, p0/z, [pA, #7, MUL VL]  // load a( 12:15,l+1 )
 	fmla  z17.d, z7.d, z10.d[0]           //
 	fmla  z21.d, z7.d, z10.d[1]           //
+        /* adjust pA */
+        add  pA, pA, #256                     // 256 = 8 * (MUL VL)
 
 	/* load next a */
-	ldr  z0, [pA, #8,  MUL VL]            // load a(  0:3, l+2 )
+	ld1d  {z0.d}, p0/z, [pA, #0,  MUL VL] // load a(  0:3, l+2 )
 	fmla  z25.d, z7.d, z11.d[0]           //
 	fmla  z29.d, z7.d, z11.d[1]           //
 
@@ -246,11 +243,11 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmla  z26.d, z8.d, z11.d[0]           //
 	fmla  z30.d, z8.d, z11.d[1]           //
 
-	ldr  z1, [pA, #9,  MUL VL]            // load a(  4:7, l+2 )
+	ld1d  {z1.d}, p0/z, [pA, #1,  MUL VL] // load a(  4:7, l+2 )
 	fmla  z19.d, z9.d, z10.d[0]           //
 	fmla  z23.d, z9.d, z10.d[1]           //
 
-	ldr  z2, [pA, #10, MUL VL]            // load a(  8:11,l+2 )
+	ld1d  {z2.d}, p0/z, [pA, #2, MUL VL]  // load a(  8:11,l+2 )
 	fmla  z27.d, z9.d, z11.d[0]           //
 	fmla  z31.d, z9.d, z11.d[1]           //
 .endm
@@ -259,7 +256,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * _M1 follows _M2
  * _M1 is followed by either _M2 or _E. 
  *  So, _M1 needs to:
- *   1. ldr z3.
+ *   1. ld z3.
  *   2. do the accumulation. ('l+2')
  *   3. for loading next round of data, consider M2 is following M1.
  *      - so don't load z7, z8, z9 in M1
@@ -285,19 +282,16 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmla  z24.d, z0.d, z5.d[0]           //
 	fmla  z28.d, z0.d, z5.d[1]           //
 
-	ldr  z3, [pA, #11, MUL VL]            // load a( 12:15,l+2 )
+	ld1d  {z3.d}, p0/z, [pA, #3, MUL VL] // load a( 12:15,l+2 )
 
 	fmla  z17.d, z1.d, z4.d[0]           //
 	fmla  z21.d, z1.d, z4.d[1]           //
 
 	/* load a */
-	ldr  z6, [pA, #12, MUL VL]           // load a(  0:3, l+3 )
+	ld1d  {z6.d}, p0/z, [pA, #4, MUL VL]	// load a(  0:3, l+3 )
 	fmla  z25.d, z1.d, z5.d[0]           //
 	fmla  z29.d, z1.d, z5.d[1]           //
 
-        /* adjust pA */
-        add  pA, pA, #256                    // 256 = 8 * (MUL VL)
-	                                     // next element of a has address: [pA, #5, MUL VL]
 	fmla  z18.d, z2.d, z4.d[0]           //
 	fmla  z22.d, z2.d, z4.d[1]           //
 
@@ -315,18 +309,13 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	                                     // next element of b has address: [pB, #64]
 	fmla  z27.d, z3.d, z5.d[0]           //
 	fmla  z31.d, z3.d, z5.d[1]           //
-
-        /* TO be loaded in next iteration, which could be either a _M2 or a _E */
-	// ldr  z7, [pA, #13, MUL VL]           // load a(  4:7, l+3 )
-	// ldr  z8, [pA, #14, MUL VL]           // load a(  8:11,l+3 )
-	// ldr  z9, [pA, #15, MUL VL]           // load a( 12:15,l+3 )
- .endm
+.endm
  
 /* Design logic:
  * _E always follows _M1. And at the end of _E, pA and pB should point to
  *   next elements.
  * So it needs to:
- *   1. ldr z7, z8, z9, in the beginning. then,
+ *   1. ld z7, z8, z9, in the beginning. then,
  *   2. do the accumulation. ('l+3')
  *   3. adjust pA and pB to next to-be-calculated elements.
  *
@@ -346,19 +335,19 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *   pB: pointing to next elements of *b
  */ 
 .macro KERNEL16x4_E
-	ldr  z7, [pA, #5, MUL VL]             // load a(  4:7, l+3 )
+	ld1d  {z7.d}, p0/z, [pA, #5, MUL VL]  // load a(  4:7, l+3 )
 	fmla  z16.d, z6.d, z10.d[0]           //
 	fmla  z20.d, z6.d, z10.d[1]           //
 	fmla  z24.d, z6.d, z11.d[0]           //
 	fmla  z28.d, z6.d, z11.d[1]           //
 
-	ldr  z8, [pA, #6, MUL VL]             // load a(  8:11,l+3 )
+	ld1d  {z8.d}, p0/z, [pA, #6, MUL VL]  // load a(  8:11,l+3 )
 	fmla  z17.d, z7.d, z10.d[0]           //
 	fmla  z21.d, z7.d, z10.d[1]           //
 	fmla  z25.d, z7.d, z11.d[0]           //
 	fmla  z29.d, z7.d, z11.d[1]           //
 
-	ldr  z9, [pA, #7, MUL VL]             // load a( 12:15,l+3 )
+	ld1d  {z9.d}, p0/z, [pA, #7, MUL VL]  // load a( 12:15,l+3 )
 	fmla  z18.d, z8.d, z10.d[0]           //
 	fmla  z22.d, z8.d, z10.d[1]           //
 	fmla  z26.d, z8.d, z11.d[0]           //
@@ -385,7 +374,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  .macro KERNEL16x4_SUB
 	/* load a */
-	ldr  z0, [pA]                        // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
 	fmla  z16.d, z0.d, z4.d[0]           //
@@ -394,16 +383,16 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmla  z20.d, z0.d, z4.d[1]           //
 	fmla  z24.d, z0.d, z5.d[0]           //
 
-	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+	ld1d  {z1.d}, p0/z, [pA, #1, MUL VL] // load a(  4:7, l )
 	fmla  z28.d, z0.d, z5.d[1]           //
 	fmla  z17.d, z1.d, z4.d[0]           //
 	fmla  z21.d, z1.d, z4.d[1]           //
 
-	ldr  z2, [pA, #2, MUL VL]            // load a(  8:11,l )
+	ld1d  {z2.d}, p0/z, [pA, #2, MUL VL] // load a(  8:11,l )
 	fmla  z25.d, z1.d, z5.d[0]           //
 	fmla  z29.d, z1.d, z5.d[1]           //
 
-	ldr  z3, [pA, #3, MUL VL]            // load a( 12:15,l )
+	ld1d  {z3.d}, p0/z, [pA, #3, MUL VL] // load a( 12:15,l )
 	fmla  z18.d, z2.d, z4.d[0]           //
 	fmla  z22.d, z2.d, z4.d[1]           //
 	fmla  z26.d, z2.d, z5.d[0]           //
@@ -440,52 +429,52 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	prfm	PSTL2KEEP, [pCRow0, #C_PRE_SIZE]
 	fmul	z0.d, z16.d, z12.d              // scale by alpha
 	fmul	z1.d, z17.d, z12.d
-	str 	z0, [pCRow0]                    // store column 0
-	str 	z1, [pCRow0, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow0]            // store column 0
+	st1d	{z1.d}, p0, [pCRow0, #1, MUL VL]
 
 	fmul	z2.d, z18.d, z12.d
 	fmul	z3.d, z19.d, z12.d
-	str 	z2, [pCRow0, #2, MUL VL]
-	str 	z3, [pCRow0, #3, MUL VL]
+	st1d	{z2.d}, p0, [pCRow0, #2, MUL VL]
+	st1d	{z3.d}, p0, [pCRow0, #3, MUL VL]
 
 	add	pCRow0, pCRow0, #128
 
 	prfm	PSTL2KEEP, [pCRow1, #C_PRE_SIZE]
 	fmul	z4.d, z20.d, z12.d              // scale by alpha
 	fmul	z5.d, z21.d, z12.d
-	str 	z4, [pCRow1]                    // store column 1
-	str 	z5, [pCRow1, #1, MUL VL]
+	st1d	{z4.d}, p0, [pCRow1]            // store column 1
+	st1d	{z5.d}, p0, [pCRow1, #1, MUL VL]
 
 	fmul	z6.d, z22.d, z12.d
 	fmul	z7.d, z23.d, z12.d
-	str 	z6, [pCRow1, #2, MUL VL]
-	str 	z7, [pCRow1, #3, MUL VL]
+	st1d	{z6.d}, p0, [pCRow1, #2, MUL VL]
+	st1d	{z7.d}, p0, [pCRow1, #3, MUL VL]
 
 	add	pCRow1, pCRow1, #128
 
 	prfm	PSTL2KEEP, [pCRow2, #C_PRE_SIZE]
 	fmul	z0.d, z24.d, z12.d              // scale by alpha
 	fmul	z1.d, z25.d, z12.d
-	str 	z0, [pCRow2]                    // store column 2
-	str 	z1, [pCRow2, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow2]            // store column 2
+	st1d	{z1.d}, p0, [pCRow2, #1, MUL VL]
 
 	fmul	z2.d, z26.d, z12.d
 	fmul	z3.d, z27.d, z12.d
-	str 	z2, [pCRow2, #2, MUL VL]
-	str 	z3, [pCRow2, #3, MUL VL]
+	st1d	{z2.d}, p0, [pCRow2, #2, MUL VL]
+	st1d	{z3.d}, p0, [pCRow2, #3, MUL VL]
 
 	add	pCRow2, pCRow2, #128
 
 	prfm	PSTL2KEEP, [pCRow3, #C_PRE_SIZE]
 	fmul	z4.d, z28.d, z12.d              // scale by alpha
 	fmul	z5.d, z29.d, z12.d
-	str 	z4, [pCRow3]                    // store column 3
-	str 	z5, [pCRow3, #1, MUL VL]
+	st1d	{z4.d}, p0, [pCRow3]            // store column 3
+	st1d	{z5.d}, p0, [pCRow3, #1, MUL VL]
 
 	fmul	z6.d, z30.d, z12.d
 	fmul	z7.d, z31.d, z12.d
-	str 	z6, [pCRow3, #2, MUL VL]
-	str 	z7, [pCRow3, #3, MUL VL]
+	st1d	{z6.d}, p0, [pCRow3, #2, MUL VL]
+	st1d	{z7.d}, p0, [pCRow3, #3, MUL VL]
 
 	add	pCRow3, pCRow3, #128
 .endm
@@ -518,7 +507,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 .macro KERNEL16x2_SUB
 	/* load a */
-	ldr  z0, [pA]                        // load a(  0:3, l )
+	ld1d  {z0.d}, p0/z, [pA]             // load a(  0:3, l )
 	/* load b */
 	ld1rqd  {z4.d}, p0/z, [pB]           // load b( l,0:1 )
         /* adjust pB */
@@ -527,14 +516,14 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	fmla  z16.d, z0.d, z4.d[0]           //
 	fmla  z20.d, z0.d, z4.d[1]           //
 
-	ldr  z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+	ld1d  {z1.d}, p0/z, [pA, #1, MUL VL] // load a(  4:7, l )
 	fmla  z17.d, z1.d, z4.d[0]           //
 
-	ldr  z2, [pA, #2, MUL VL]            // load a(  8:11,l )
+	ld1d  {z2.d}, p0/z, [pA, #2, MUL VL] // load a(  8:11,l )
 	fmla  z21.d, z1.d, z4.d[1]           //
 	fmla  z18.d, z2.d, z4.d[0]           //
 
-	ldr  z3, [pA, #3, MUL VL]            // load a( 12:15,l )
+	ld1d  {z3.d}, p0/z, [pA, #3, MUL VL] // load a( 12:15,l )
 	fmla  z22.d, z2.d, z4.d[1]           //
 
         /* adjust pA */
@@ -553,29 +542,29 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *   z0 ~ z7    : for storing alpha-multiplied result
  */
 .macro SAVE16x2
-	fmul	z0.d, z16.d, z12.d              // scale by alpha
+	fmul	z0.d, z16.d, z12.d            // scale by alpha
 	fmul	z1.d, z17.d, z12.d
-	str 	z0, [pCRow0]                    // store column 0
-	str 	z1, [pCRow0, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow0]          // store column 0
+	st1d	{z1.d}, p0, [pCRow0, #1, MUL VL]
 
 	add	pCRow1, pCRow0, LDC
 
 	fmul	z2.d, z18.d, z12.d
 	fmul	z3.d, z19.d, z12.d
-	str 	z2, [pCRow0, #2, MUL VL]
-	str 	z3, [pCRow0, #3, MUL VL]
+	st1d	{z2.d}, p0, [pCRow0, #2, MUL VL]
+	st1d	{z3.d}, p0, [pCRow0, #3, MUL VL]
 
 	add	pCRow0, pCRow0, #128            // 128=4*(MUL VL)=16*sizeof(double)
 
 	fmul	z4.d, z20.d, z12.d              // scale by alpha
 	fmul	z5.d, z21.d, z12.d
-	str 	z4, [pCRow1]                    // store column 1
-	str 	z5, [pCRow1, #1, MUL VL]
+	st1d	{z4.d}, p0, [pCRow1]            // store column 1
+	st1d	{z5.d}, p0, [pCRow1, #1, MUL VL]
 
 	fmul	z6.d, z22.d, z12.d
 	fmul	z7.d, z23.d, z12.d
-	str 	z6, [pCRow1, #2, MUL VL]
-	str 	z7, [pCRow1, #3, MUL VL]
+	st1d	{z6.d}, p0, [pCRow1, #2, MUL VL]
+	st1d	{z7.d}, p0, [pCRow1, #3, MUL VL]
 .endm
 
 /******************************************************************************
@@ -599,16 +588,16 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *   z4       : b
  */
 .macro KERNEL16x1_SUB
-	ldr  	z0, [pA]                        // load a(  0:3, l )
+	ld1d  	{z0.d}, p0/z, [pA]              // load a(  0:3, l )
 	ld1rd 	{z4.d}, p0/z, [pB]              // load b( l,0 )
 	add	pB , pB, #8
 	fmla 	z16.d, p0/m, z0.d, z4.d         //
 
-	ldr  	z1, [pA, #1, MUL VL]            // load a(  4:7, l )
+	ld1d  	{z1.d}, p0/z, [pA, #1, MUL VL]  // load a(  4:7, l )
 	fmla 	z17.d, p0/m, z1.d, z4.d         //
 
-	ldr  	z2, [pA, #2, MUL VL]            // load a(  8:11,l )
-	ldr  	z3, [pA, #3, MUL VL]            // load a( 12:15,l )
+	ld1d  	{z2.d}, p0/z, [pA, #2, MUL VL]  // load a(  8:11,l )
+	ld1d  	{z3.d}, p0/z, [pA, #3, MUL VL]  // load a( 12:15,l )
 	add	pA , pA, #128                   // 16 * sizeof( double )
 
 	fmla 	z18.d, p0/m, z2.d, z4.d         //
@@ -626,13 +615,13 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .macro SAVE16x1
 	fmul	z0.d, z16.d, z12.d              // scale by alpha
 	fmul	z1.d, z17.d, z12.d
-	str 	z0, [pCRow0]                    // store column 0
-	str 	z1, [pCRow0, #1, MUL VL]
+	st1d	{z0.d}, p0, [pCRow0]            // store column 0
+	st1d	{z1.d}, p0, [pCRow0, #1, MUL VL]
 
 	fmul	z2.d, z18.d, z12.d
 	fmul	z3.d, z19.d, z12.d
-	str 	z2, [pCRow0, #2, MUL VL]
-	str 	z3, [pCRow0, #3, MUL VL]
+	st1d	{z2.d}, p0, [pCRow0, #2, MUL VL]
+	st1d	{z3.d}, p0, [pCRow0, #3, MUL VL]
 
 	add	pCRow0, pCRow0, #128            // 16 * sizeof( double )
 .endm
