@@ -124,6 +124,10 @@ DTRMMKERNEL    =  dtrmm_kernel_sve256_$(DGEMM_UNROLL_M)x$(DGEMM_UNROLL_N).S
 
 ifneq ($(DGEMM_UNROLL_M), $(DGEMM_UNROLL_N))
 
+ifeq ($(DGEMM_UNROLL_M), 16)
+DGEMMINCOPY    =  gemm_ncopy_sve_$(DGEMM_UNROLL_M).c
+DGEMMITCOPY    =  gemm_tcopy_sve_$(DGEMM_UNROLL_M).c
+else
 ifeq ($(DGEMM_UNROLL_M), 8)
 DGEMMINCOPY    =  dgemm_ncopy_$(DGEMM_UNROLL_M).S
 DGEMMITCOPY    =  dgemm_tcopy_$(DGEMM_UNROLL_M).S
@@ -131,14 +135,15 @@ else
 DGEMMINCOPY    =  ../generic/gemm_ncopy_$(DGEMM_UNROLL_M).c
 DGEMMITCOPY    =  ../generic/gemm_tcopy_$(DGEMM_UNROLL_M).c
 endif
+endif
 
 DGEMMINCOPYOBJ =  dgemm_incopy$(TSUFFIX).$(SUFFIX)
 DGEMMITCOPYOBJ =  dgemm_itcopy$(TSUFFIX).$(SUFFIX)
 endif
 
 ifeq ($(DGEMM_UNROLL_N), 4)
-DGEMMONCOPY    =  dgemm_ncopy_$(DGEMM_UNROLL_N).S
-DGEMMOTCOPY    =  dgemm_tcopy_$(DGEMM_UNROLL_N).S
+DGEMMONCOPY    =  gemm_ncopy_sve_$(DGEMM_UNROLL_N).c
+DGEMMOTCOPY    =  gemm_tcopy_sve_$(DGEMM_UNROLL_N).c
 else
 DGEMMONCOPY    =  ../generic/gemm_ncopy_$(DGEMM_UNROLL_N).c
 DGEMMOTCOPY    =  ../generic/gemm_tcopy_$(DGEMM_UNROLL_N).c
