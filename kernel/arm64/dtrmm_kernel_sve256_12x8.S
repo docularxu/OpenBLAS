@@ -2113,7 +2113,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	mov	pB, origPB
 #else
 	mov	pB, origPB
-	lsl	temp, temp
 	add	pA, pA, tempOffset, lsl #3	// #3 = 2^3 = 1 * sizeof( double ), where 1 is M1
 						// pA is moved M2 in its k dimension
 	add	pB, pB, tempOffset, lsl #5	// #5 = 2^5 = 4 * sizeof( double ), where 4 is L4
