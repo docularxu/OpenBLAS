@@ -1,5 +1,6 @@
 /*********************************************************************/
 /* Copyright 2009, 2010 The University of Texas at Austin.           */
+/* Copyright (c) 2020, Hisilicon Limited.                            */
 /* All rights reserved.                                              */
 /*                                                                   */
 /* Redistribution and use in source and binary forms, with or        */
@@ -194,6 +195,11 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
   FLOAT *aa, *cc;
   BLASLONG  kk;
 
+#ifndef GEMM_UNROLL_M_SHIFT
+  BLASLONG mi;
+  mi = m - ((m / GEMM_DEFAULT_UNROLL_M) * GEMM_DEFAULT_UNROLL_M);
+#endif
+
 #if 0
   fprintf(stderr, "TRSM RT KERNEL m = %3ld  n = %3ld  k = %3ld offset = %3ld\n",
 	  m, n, k, offset);
@@ -202,19 +208,32 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
   kk = n - offset;
   c += n * ldc * COMPSIZE;
   b += n * k   * COMPSIZE;
-
+#ifndef GEMM_UNROLL_N_SHIFT
+  if ( n % GEMM_UNROLL_N) {
+	int mode_n = n % GEMM_UNROLL_N;
+#else 
   if (n & (GEMM_UNROLL_N - 1)) {
+#endif
 
     j = 1;
     while (j < GEMM_UNROLL_N) {
-      if (n & j) {
+#ifndef GEMM_UNROLL_N_SHIFT
+        if( mode_n & j) {
+      
+#else
+	if (n & j) {
+#endif
 
 	aa  = a;
 	b -= j * k  * COMPSIZE;
 	c -= j * ldc* COMPSIZE;
 	cc  = c;
-
-	i = (m >> GEMM_UNROLL_M_SHIFT);
+#ifndef GEMM_UNROLL_M_SHIFT
+    i = (m / GEMM_DEFAULT_UNROLL_M);
+#else
+    i = (m >> GEMM_UNROLL_M_SHIFT);
+#endif
+	
 	if (i > 0) {
 
 	  do {
@@ -240,10 +259,17 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
 	  } while (i > 0);
 	}
 
-	if (m & (GEMM_UNROLL_M - 1)) {
-	  i = (GEMM_UNROLL_M >> 1);
-	  do {
-	    if (m & i) {
+#ifndef GEMM_UNROLL_M_SHIFT
+      if (m % GEMM_UNROLL_M) {
+    i = 8;
+	do {
+	  if (mi & i) {
+#else
+      if (m & (GEMM_UNROLL_M - 1)) {
+	i = (GEMM_UNROLL_M >> 1);
+	do {
+	  if (m & i) {
+#endif
 
 	      if (k - kk > 0) {
 		GEMM_KERNEL(i, j, k - kk, dm1,
@@ -272,8 +298,11 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
       j <<= 1;
     }
   }
-
-  j = (n >> GEMM_UNROLL_N_SHIFT);
+#ifndef GEMM_UNROLL_N_SHIFT
+	j = n / GEMM_UNROLL_N;
+#else
+	j = (n >> GEMM_UNROLL_N_SHIFT);
+#endif
 
   if (j > 0) {
 
@@ -282,8 +311,12 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
       b -= GEMM_UNROLL_N * k   * COMPSIZE;
       c -= GEMM_UNROLL_N * ldc * COMPSIZE;
       cc  = c;
-
-      i = (m >> GEMM_UNROLL_M_SHIFT);
+#ifndef GEMM_UNROLL_M_SHIFT
+    i = (m / GEMM_DEFAULT_UNROLL_M);
+#else
+    i = (m >> GEMM_UNROLL_M_SHIFT);
+#endif
+     
       if (i > 0) {
 	do {
 	  if (k - kk > 0) {
@@ -308,10 +341,18 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
 	} while (i > 0);
       }
 
+#ifndef GEMM_UNROLL_M_SHIFT
+      if (m % GEMM_UNROLL_M) {
+    i = 8;
+	do {
+	  if (mi & i) {
+#else
       if (m & (GEMM_UNROLL_M - 1)) {
 	i = (GEMM_UNROLL_M >> 1);
 	do {
 	  if (m & i) {
+#endif
+
 	    if (k - kk > 0) {
 	      GEMM_KERNEL(i, GEMM_UNROLL_N, k - kk, dm1,
 #ifdef COMPLEX

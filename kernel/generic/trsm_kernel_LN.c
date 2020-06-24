@@ -1,5 +1,6 @@
 /*********************************************************************/
 /* Copyright 2009, 2010 The University of Texas at Austin.           */
+/* Copyright (c) 2020, Hisilicon Limited.                            */
 /* All rights reserved.                                              */
 /*                                                                   */
 /* Redistribution and use in source and binary forms, with or        */
@@ -180,6 +181,16 @@ static inline void solve(BLASLONG m, BLASLONG n, FLOAT *a, FLOAT *b, FLOAT *c, B
 
 #endif
 
+#ifndef GEMM_UNROLL_N_SHIFT
+static inline int hibit(unsigned int n) {
+    n |= (n >>  1);
+    n |= (n >>  2);
+    n |= (n >>  4);
+    n |= (n >>  8);
+    n |= (n >> 16);
+    return n - (n >> 1);
+}
+#endif
 
 int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
 #ifdef COMPLEX
@@ -191,22 +202,40 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
   FLOAT *aa, *cc;
   BLASLONG  kk;
 
+#ifndef GEMM_UNROLL_M_SHIFT
+  BLASLONG mi, mm;
+  mm = (m / GEMM_DEFAULT_UNROLL_M) * GEMM_DEFAULT_UNROLL_M;
+  mi = m - mm;
+#endif
+
 #if 0
   fprintf(stderr, "TRSM KERNEL LN : m = %3ld  n = %3ld  k = %3ld offset = %3ld\n",
 	  m, n, k, offset);
 #endif
 
+#ifndef GEMM_UNROLL_N_SHIFT
+  j = n/GEMM_UNROLL_N;
+#else
   j = (n >> GEMM_UNROLL_N_SHIFT);
+#endif
 
   while (j > 0) {
 
     kk = m + offset;
 
+#ifndef GEMM_UNROLL_M_SHIFT
+    if (m % (GEMM_UNROLL_M )) {
+      for (i = 1; i < GEMM_UNROLL_M; i *= 2){
+	if (mi & i) {
+	  aa = a + (mm + (mi / i * i) - i) * k * COMPSIZE;
+	  cc = c + (mm + (mi / i * i) - i)     * COMPSIZE;
+#else
     if (m & (GEMM_UNROLL_M - 1)) {
       for (i = 1; i < GEMM_UNROLL_M; i *= 2){
 	if (m & i) {
 	  aa = a + ((m & ~(i - 1)) - i) * k * COMPSIZE;
 	  cc = c + ((m & ~(i - 1)) - i)     * COMPSIZE;
+#endif
 
 	  if (k - kk > 0) {
 	    GEMM_KERNEL(i, GEMM_UNROLL_N, k - kk, dm1,
@@ -229,10 +258,17 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
       }
     }
 
+#ifndef GEMM_UNROLL_M_SHIFT
+    i = (m / GEMM_DEFAULT_UNROLL_M);
+    if (i > 0) {
+      aa = a + ((m / GEMM_UNROLL_M * GEMM_UNROLL_M) - GEMM_UNROLL_M) * k * COMPSIZE;
+      cc = c + ((m / GEMM_UNROLL_M * GEMM_UNROLL_M) - GEMM_UNROLL_M)     * COMPSIZE;
+#else
     i = (m >> GEMM_UNROLL_M_SHIFT);
     if (i > 0) {
       aa = a + ((m & ~(GEMM_UNROLL_M - 1)) - GEMM_UNROLL_M) * k * COMPSIZE;
       cc = c + ((m & ~(GEMM_UNROLL_M - 1)) - GEMM_UNROLL_M)     * COMPSIZE;
+#endif
 
       do {
 	if (k - kk > 0) {
@@ -263,19 +299,35 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
     j --;
   }
 
-  if (n & (GEMM_UNROLL_N - 1)) {
+#ifndef GEMM_UNROLL_N_SHIFT
+    int left_n = n % GEMM_UNROLL_N;
+    if( left_n > 0 ){
+	j = hibit(left_n);
+	while (j > 0) {
+            if (left_n & j) {
 
-    j = (GEMM_UNROLL_N >> 1);
-    while (j > 0) {
-      if (n & j) {
+#else
+  if (n & (GEMM_UNROLL_N - 1)) {
+        j = (GEMM_UNROLL_N >> 1);
+	while (j > 0) {
+            if (n & j) {
+#endif
 
 	kk = m + offset;
 
+#ifndef GEMM_UNROLL_M_SHIFT
+	if (m % GEMM_UNROLL_M ) {
+	  for (i = 1; i < GEMM_UNROLL_M; i *= 2){
+	    if (mi & i) {
+              aa = a + (mm + (mi / i * i) - i) * k * COMPSIZE;
+              cc = c + (mm + (mi / i * i) - i)     * COMPSIZE;
+#else
 	if (m & (GEMM_UNROLL_M - 1)) {
 	  for (i = 1; i < GEMM_UNROLL_M; i *= 2){
 	    if (m & i) {
 	      aa = a + ((m & ~(i - 1)) - i) * k * COMPSIZE;
 	      cc = c + ((m & ~(i - 1)) - i)     * COMPSIZE;
+#endif
 
 	      if (k - kk > 0) {
 		GEMM_KERNEL(i, j, k - kk, dm1,
@@ -296,11 +348,17 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k,  FLOAT dummy1,
 	    }
 	  }
 	}
-
+#ifndef GEMM_UNROLL_M_SHIFT
+    i = (m / GEMM_DEFAULT_UNROLL_M);
+	if (i > 0) {
+          aa = a + ((m / GEMM_UNROLL_M * GEMM_UNROLL_M) - GEMM_UNROLL_M) * k * COMPSIZE;
+          cc = c + ((m / GEMM_UNROLL_M * GEMM_UNROLL_M) - GEMM_UNROLL_M)     * COMPSIZE;
+#else
 	i = (m >> GEMM_UNROLL_M_SHIFT);
 	if (i > 0) {
 	  aa = a + ((m & ~(GEMM_UNROLL_M - 1)) - GEMM_UNROLL_M) * k * COMPSIZE;
 	  cc = c + ((m & ~(GEMM_UNROLL_M - 1)) - GEMM_UNROLL_M)     * COMPSIZE;
+#endif
 
 	  do {
 	    if (k - kk > 0) {
