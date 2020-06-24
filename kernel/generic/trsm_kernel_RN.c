@@ -1,5 +1,6 @@
 /*********************************************************************/
 /* Copyright 2009, 2010 The University of Texas at Austin.           */
+/* Copyright (c) 2020, Hisilicon Limited.                            */
 /* All rights reserved.                                              */
 /*                                                                   */
 /* Redistribution and use in source and binary forms, with or        */
@@ -170,6 +171,16 @@ static inline void solve(BLASLONG m, BLASLONG n, FLOAT *a, FLOAT *b, FLOAT *c, B
 
 #endif
 
+#ifndef GEMM_UNROLL_N_SHIFT
+static inline int hibit(unsigned int n) {
+    n |= (n >>  1);
+    n |= (n >>  2);
+    n |= (n >>  4);
+    n |= (n >>  8);
+    n |= (n >> 16);
+    return n - (n >> 1);
+}
+#endif
 
 int CNAME(BLASLONG m, BLASLONG n, BLASLONG k, FLOAT dummy1,
 #ifdef COMPLEX
@@ -180,6 +191,11 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k, FLOAT dummy1,
   FLOAT *aa, *cc;
   BLASLONG  kk;
   BLASLONG i, j, jj;
+  
+#ifndef GEMM_UNROLL_M_SHIFT
+  BLASLONG mi;
+  mi = m - ((m / GEMM_DEFAULT_UNROLL_M) * GEMM_DEFAULT_UNROLL_M);
+#endif
 
 #if 0
   fprintf(stderr, "TRSM RN KERNEL m = %3ld  n = %3ld  k = %3ld offset = %3ld\n",
@@ -187,15 +203,23 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k, FLOAT dummy1,
 #endif
 
   jj = 0;
+#ifndef GEMM_UNROLL_N_SHIFT
+  j = n/GEMM_UNROLL_N;
+#else
   j = (n >> GEMM_UNROLL_N_SHIFT);
+#endif
   kk = -offset;
 
   while (j > 0) {
 
     aa = a;
     cc = c;
-
+#ifndef GEMM_UNROLL_M_SHIFT
+    i = (m / GEMM_DEFAULT_UNROLL_M);
+#else
     i = (m >> GEMM_UNROLL_M_SHIFT);
+#endif
+    
 
     if (i > 0) {
       do {
@@ -218,11 +242,18 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k, FLOAT dummy1,
       } while (i > 0);
     }
 
-
-    if (m & (GEMM_UNROLL_M - 1)) {
-      i = (GEMM_UNROLL_M >> 1);
+#ifndef GEMM_UNROLL_M_SHIFT
+    if (m % GEMM_UNROLL_M ) {
+    i = 8;
       while (i > 0) {
-	if (m & i) {
+	if (mi & i) {
+#else
+    if (m & (GEMM_UNROLL_M - 1)) {
+    i = (GEMM_UNROLL_M >> 1);
+	  while (i > 0) {
+	    if (m & i) {
+#endif
+
 	    if (kk > 0) {
 	      GEMM_KERNEL(i, GEMM_UNROLL_N, kk, dm1,
 #ifdef COMPLEX
@@ -249,16 +280,27 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k, FLOAT dummy1,
     jj += GEMM_UNROLL_M;
   }
 
-  if (n & (GEMM_UNROLL_N - 1)) {
+#ifndef GEMM_UNROLL_N_SHIFT
+    int left_n = n % GEMM_UNROLL_N;
+    if( left_n > 0 ){
+	j = hibit(left_n);
+	while (j > 0) {
+            if (left_n & j) {
 
-    j = (GEMM_UNROLL_N >> 1);
-    while (j > 0) {
-      if (n & j) {
+#else
+    if (n & (GEMM_UNROLL_N - 1)) {
+	j = (GEMM_UNROLL_N >> 1);
+	while (j > 0) {
+	    if (n & j) {
+#endif
 
 	aa = a;
 	cc = c;
-
-	i = (m >> GEMM_UNROLL_M_SHIFT);
+#ifndef GEMM_UNROLL_M_SHIFT
+    i = (m / GEMM_DEFAULT_UNROLL_M);
+#else
+    i = (m >> GEMM_UNROLL_M_SHIFT);
+#endif
 
 	while (i > 0) {
 	  if (kk > 0) {
@@ -281,10 +323,18 @@ int CNAME(BLASLONG m, BLASLONG n, BLASLONG k, FLOAT dummy1,
 	  i --;
 	}
 
-	if (m & (GEMM_UNROLL_M - 1)) {
-	  i = (GEMM_UNROLL_M >> 1);
+#ifndef GEMM_UNROLL_M_SHIFT
+    if (m % GEMM_UNROLL_M ) {
+    i = 8;
+      while (i > 0) {
+	if (mi & i) {
+#else
+    if (m & (GEMM_UNROLL_M - 1)) {
+    i = (GEMM_UNROLL_M >> 1);
 	  while (i > 0) {
 	    if (m & i) {
+#endif
+
 	      if (kk > 0) {
 		GEMM_KERNEL(i, j, kk, dm1,
 #ifdef COMPLEX
