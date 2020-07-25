@@ -2650,7 +2650,7 @@ is a big desktop or server with abundant cache rather than a phone or embedded d
 #elif defined(TSV110SVE)
 
 #define SGEMM_DEFAULT_UNROLL_M  16
-#define SGEMM_DEFAULT_UNROLL_N  4
+#define SGEMM_DEFAULT_UNROLL_N  12
 
 #define DGEMM_DEFAULT_UNROLL_M  16
 #define DGEMM_DEFAULT_UNROLL_N  4
