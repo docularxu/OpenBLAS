@@ -106,8 +106,8 @@ DGEMVTKERNEL = gemv_t.S
 CGEMVTKERNEL = zgemv_t.S
 ZGEMVTKERNEL = zgemv_t.S
 
-SGEMMKERNEL    =  sgemm_kernel_$(SGEMM_UNROLL_M)x$(SGEMM_UNROLL_N).S
-STRMMKERNEL    =  strmm_kernel_$(SGEMM_UNROLL_M)x$(SGEMM_UNROLL_N).S
+SGEMMKERNEL    =  sgemm_kernel_sve256_$(SGEMM_UNROLL_M)x$(SGEMM_UNROLL_N).S
+STRMMKERNEL    =  strmm_kernel_sve256_$(SGEMM_UNROLL_M)x$(SGEMM_UNROLL_N).S
 ifneq ($(SGEMM_UNROLL_M), $(SGEMM_UNROLL_N))
 SGEMMINCOPY    =  ../generic/gemm_ncopy_$(SGEMM_UNROLL_M).c
 SGEMMITCOPY    =  ../generic/gemm_tcopy_$(SGEMM_UNROLL_M).c
