@@ -143,6 +143,8 @@ REALNAME:
 
 #if defined(CORTEXA57)
 #define BUFFER_SIZE     (20 << 20)
+#elif defined(TSV110SVE)
+#define BUFFER_SIZE	(32 << 20)
 #else
 #define BUFFER_SIZE     (16 << 20)
 #endif
