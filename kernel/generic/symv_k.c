@@ -39,11 +39,16 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "common.h"
-#include "symcopy.h"
+#ifdef LOWER
+#ifdef DOUBLE
+ #include "symcopy.h"
+#endif
+#endif
 
 int CNAME(BLASLONG m, BLASLONG offset, FLOAT alpha, FLOAT *a, BLASLONG lda,
 	  FLOAT *x, BLASLONG incx, FLOAT *y, BLASLONG incy, FLOAT *buffer){
-
+#ifdef LOWER
+#ifdef DOUBLE
   BLASLONG is, min_i;
   FLOAT *X = x;
   FLOAT *Y = y;
@@ -117,7 +122,8 @@ int CNAME(BLASLONG m, BLASLONG offset, FLOAT alpha, FLOAT *a, BLASLONG lda,
   if (incy != 1) {
     COPY_K(m, Y, 1, y, incy);
   }
-
+#endif
+#endif
   return 0;
 }
 

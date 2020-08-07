@@ -62,7 +62,12 @@ CCOMMON_OPT += -march=armv8.2-a -mtune=tsv110
 FCOMMON_OPT += -march=armv8.2-a -mtune=tsv110
 endif
 ifeq ($(CORE), TSV110SVE)
-CCOMMON_OPT += -march=armv8.2-a+sve -mtune=tsv110
+# CCOMMON_OPT += -O3 -march=armv8.2-a+sve -fopt-info-vec-missed
+# CCOMMON_OPT += -O3 -march=armv8.2-a+sve -fopt-info-loop-missed
+#-fopt-info-loop-missed
+CCOMMON_OPT += -O3 -march=armv8.2-a+sve -fopt-info-vec-optimized
+# CCOMMON_OPT += -O3 -march=armv8.2-a+sve -fopt-info-loop-optimized
+# CCOMMON_OPT += -O3 -march=armv8.2-a+sve -fopt-info-vec-all -fopt-info-loop-all
 FCOMMON_OPT += -march=armv8.2-a+sve -mtune=tsv110
 endif
 endif
