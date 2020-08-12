@@ -108,7 +108,7 @@ int CNAME(BLASLONG m, BLASLONG n, FLOAT *a, BLASLONG lda, BLASLONG posX, BLASLON
 	    if (X < posY) {
 
 	      for (ii = 0; ii < 12; ii++){
-
+		printf("In loop 1 ii=%ld\n", ii);
 		b[  0] = *(a01 +  0);
 		b[  1] = *(a01 +  1);
 		b[  2] = *(a01 +  2);
@@ -397,6 +397,7 @@ int CNAME(BLASLONG m, BLASLONG n, FLOAT *a, BLASLONG lda, BLASLONG posX, BLASLON
 	  if (X < posY) {
 
 	    for (ii = 0; ii < i; ii++){
+		printf("In loop 2 ii=%ld\n", ii);
 
 	      b[  0] = *(a01 +  0);
 	      b[  1] = *(a01 +  1);

@@ -314,6 +314,13 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 #ifndef TRANSA
     printf("To call TRMM_ILTCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
     TRMM_ILTCOPY(min_l, min_i, a, lda, m - min_l, m - min_l, sa);
+      printf("After TRMM_ILTCOPPY(), sa:");
+      for(int indexb=0; indexb<min_l*min_i; indexb++) {
+	      if(indexb%min_i == 0) printf("\n");
+	      printf("%08.5f\t", *(sa+indexb));
+      }
+      printf("\n");
+
 #else
     printf("To call TRMM_IUNCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
     TRMM_IUNCOPY(min_l, min_i, a, lda, m - min_l, m - min_l, sa);
@@ -339,6 +346,17 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       GEMM_ONCOPY(min_l, min_jj, b + (m - min_l + jjs * ldb) * COMPSIZE, ldb,
 		  sb + min_l * (jjs - js) * COMPSIZE);
 
+      printf("B originali, ie. b:\n");
+      for(int indexb=0; indexb<28; indexb++) {
+	      printf("%08.5f\t", *(b+(m-min_l+jjs*ldb+ indexb)*COMPSIZE));
+      }
+      printf("\n");
+      printf("B after copy, ie. sb:\n");
+      for(int indexb=0; indexb<28; indexb++) {
+	      printf("%08.5f\t", *(sb+(min_l*(jjs-js)+ indexb)*COMPSIZE));
+      }
+      printf("\n");
+
       STOP_RPCC(outercost);
 
       START_RPCC();
@@ -351,6 +369,11 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 #endif
 		    sa, sb + min_l * (jjs - js) * COMPSIZE,
 		    b + (m - min_l + jjs * ldb) * COMPSIZE, ldb, 0);
+      printf("After TRMM_KERNEL_T(), print result:\n");
+      for(int indexb=0; indexb<min_i; indexb++) {
+	      printf("%08.5f\t", *(b+(m-min_l+jjs*ldb+ indexb)*COMPSIZE));
+      }
+      printf("\n");
 
       STOP_RPCC(trmmcost);
     }
@@ -365,6 +388,13 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 #ifndef TRANSA
       printf("To call TRMM_ILTCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
       TRMM_ILTCOPY(min_l, min_i, a, lda, m - min_l, is, sa);
+      printf("After TRMM_ILTCOPPY(), sa:");
+      for(int indexb=0; indexb<min_l*min_i; indexb++) {
+	      if(indexb%min_i == 0) printf("\n");
+	      printf("%08.5f\t", *(sa+indexb));
+      }
+      printf("\n");
+
 #else
       printf("To call TRMM_IUNCOPY(), min_l=%ld, min_i=%ld, lda=%ld\n", min_l, min_i, lda);
       TRMM_IUNCOPY(min_l, min_i, a, lda, m - min_l, is, sa);
@@ -381,6 +411,12 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 		    ZERO,
 #endif
 		    sa, sb, b + (is + js * ldb) * COMPSIZE, ldb, is - m + min_l);
+      printf("After TRMM_KERNEL_T(), print result:\n");
+      for(int indexb=0; indexb<min_i; indexb++) {
+	      printf("%08.5f\t", *(b+(is+js*ldb+ indexb)*COMPSIZE));
+      }
+      printf("\n");
+
 
       STOP_RPCC(trmmcost);
     }
