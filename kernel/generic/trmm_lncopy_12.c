@@ -48,6 +48,8 @@ int CNAME(BLASLONG m, BLASLONG n, FLOAT *a, BLASLONG lda, BLASLONG posX, BLASLON
   FLOAT *a01, *a02, *a03 ,*a04, *a05, *a06, *a07, *a08;
   FLOAT *a09, *a10, *a11, *a12;
 
+  printf("Enter %s()\n", __func__);
+  printf("m=%ld, n=%ld, lda=%ld, posX=%ld, posY=%ld\n", m, n, lda, posX, posY);
   js = (n / 12);
 
   if (js > 0){

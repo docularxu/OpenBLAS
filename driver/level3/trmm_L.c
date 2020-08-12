@@ -334,6 +334,8 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
 #endif
       START_RPCC();
       printf("To call GEMM_ONCOPY(), min_l=%ld, min_jj=%ld, ldb=%ld\n", min_l, min_jj, ldb);
+      printf("m=%ld, js=%ld, jjs=%ld\n",  m, js, jjs);
+      printf("copy from b+%ld to sb+%ld\n", (m-min_l+jjs*ldb), (min_l*(jjs-js)));
       GEMM_ONCOPY(min_l, min_jj, b + (m - min_l + jjs * ldb) * COMPSIZE, ldb,
 		  sb + min_l * (jjs - js) * COMPSIZE);
 
@@ -342,6 +344,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       START_RPCC();
 
       printf("To call TRMM_KERNEL_T(), min_i=%ld, min_jj=%ld, min_l=%ld, ldb=%ld, offset=0\n", min_i, min_jj, min_l, ldb);
+      printf("Calculate: sa, sb+%ld; write into: b+%ld\n", (min_l*(jjs-js)), (m-min_l+jjs*ldb));
       TRMM_KERNEL_T(min_i, min_jj, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
@@ -372,6 +375,7 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n, FLOAT *sa, FLO
       START_RPCC();
 
       printf("To call TRMM_KERNEL_T(), min_i=%ld, min_j=%ld, min_l=%ld, ldb=%ld, offset=%ld\n", min_i, min_j, min_l, ldb, is -m + min_l);
+      printf("Calculate: sa, sb; write into: b+%ld\n",  (is+js*ldb));
       TRMM_KERNEL_T(min_i, min_j, min_l, dp1,
 #ifdef COMPLEX
 		    ZERO,
