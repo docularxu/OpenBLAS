@@ -82,8 +82,8 @@ ZSWAPKERNEL  = zswap_vector.c
 
 SGEMVNKERNEL = gemv_n_vector.c
 DGEMVNKERNEL = gemv_n_vector.c
-CGEMVNKERNEL = zgemv_n_vector.c
-ZGEMVNKERNEL = zgemv_n_vector.c
+CGEMVNKERNEL = zgemv_n_rvv.c
+ZGEMVNKERNEL = zgemv_n_rvv.c
 
 SGEMVTKERNEL = gemv_t_vector.c
 DGEMVTKERNEL = gemv_t_vector.c
