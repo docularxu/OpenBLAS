@@ -87,8 +87,8 @@ ZGEMVNKERNEL = zgemv_n_rvv.c
 
 SGEMVTKERNEL = gemv_t_vector.c
 DGEMVTKERNEL = gemv_t_vector.c
-CGEMVTKERNEL = zgemv_t_vector.c
-ZGEMVTKERNEL = zgemv_t_vector.c
+CGEMVTKERNEL = zgemv_t_rvv.c
+ZGEMVTKERNEL = zgemv_t_rvv.c
 
 STRMMKERNEL	= strmm_kernel_$(SGEMM_UNROLL_M)x$(SGEMM_UNROLL_N)_zvl256b.c
 DTRMMKERNEL	= dtrmm_kernel_$(DGEMM_UNROLL_M)x$(DGEMM_UNROLL_N)_zvl256b.c
