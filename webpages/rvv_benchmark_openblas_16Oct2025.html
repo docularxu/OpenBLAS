@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RISC-V GEMM Performance Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .header-section {
+            background-color: #3b82f6;
+            color: white;
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+        }
+        .flops-highlight {
+            color: #10b981; /* Green for higher performance */
+            font-weight: 700;
+        }
+        .flops-ratio {
+            color: #f59e0b; /* Amber for ratios */
+            font-weight: 700;
+        }
+        th {
+            background-color: #e5e7eb;
+        }
+        /* Ensure chart container maintains a reasonable height */
+        .chart-visual {
+            min-height: 450px;
+        }
+        /* Author block styles */
+        .authors-container {
+            margin: 20px auto 40px auto;
+            max-width: 1100px;
+            background-color: #f1f8ff;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .authors-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+        .author-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .author-logo {
+            margin-bottom: 15px;
+        }
+        .author-logo img {
+            max-height: 90px;
+            display: block;
+        }
+        .author-info {
+            color: #2c3e50;
+            font-size: 0.9em;
+            line-height: 1.7;
+        }
+        .author-info strong {
+            font-size: 1.1em;
+            color: #1e3a5f;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .author-links {
+            margin-top: 10px;
+            font-size: 0.85em;
+            line-height: 1.8;
+        }
+        .author-links a {
+            color: #1e88e5;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        .author-links a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 900px) {
+            .authors-grid {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+        /* Environment section styles */
+        .environment {
+            margin: 40px 0;
+            background-color: #fcfcfc;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+        .env-grid {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 20px;
+            overflow-x: auto;
+        }
+        .env-card {
+            background-color: #ffffff;
+            border-left: 5px solid #4CAF50;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .env-card.software {
+            flex: 0 0 40%;
+            max-width: 40%;
+            min-width: 40%;
+        }
+        .env-card.hardware {
+            flex: 0 0 60%;
+            max-width: 60%;
+            min-width: 60%;
+        }
+        .env-card h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: #2c3e50;
+            font-size: 1.4em;
+        }
+        .env-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #1b5e20;
+            margin-bottom: 8px;
+        }
+        .env-logos {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .env-logo {
+            max-height: 88px;
+            border-radius: 8px;
+            background-color: #f5f5f5;
+            padding: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+        .env-logo img {
+            display: block;
+            max-height: 76px;
+            max-width: 140px;
+        }
+        .env-card p {
+            margin: 6px 0;
+            color: #555;
+        }
+        .isa-profile {
+            word-break: break-word;
+            line-height: 1.5;
+        }
+        .env-card a {
+            color: #1e88e5;
+            text-decoration: none;
+        }
+        .env-card a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 900px) {
+            .env-grid {
+                flex-wrap: wrap;
+            }
+            .env-card.software,
+            .env-card.hardware {
+                flex: 0 0 100%;
+                max-width: 100%;
+                min-width: 100%;
+            }
+        }
+        /* Version section styles */
+        .detail-section {
+            margin: 40px 0;
+            background-color: #fcfcfc;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+        .detail-section h3 {
+            margin-top: 0;
+            color: #34495e;
+            font-size: 1.6em;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+        .detail-section p {
+            color: #555;
+            margin: 10px 0;
+        }
+        .detail-section a {
+            color: #1e88e5;
+            text-decoration: none;
+        }
+        .detail-section a:hover {
+            text-decoration: underline;
+        }
+        .detail-section code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d73a49;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="app" class="max-w-6xl mx-auto">
+        <div class="card mb-8">
+            <div class="header-section p-6">
+                <h1 class="text-2xl font-bold">RISC-V GEMM Performance Summary</h1>
+                <p class="mt-1 text-sm">Comparison of DGEMM (Double) and SGEMM (Single) across Vector Targets (Based on peak MFLOPS at Matrix Size 4096)</p>
+                <p class="mt-2 text-xs opacity-80">Copyright 2025</p>
+            </div>
+
+            <section class="authors-container">
+                <div class="authors-grid">
+                    <div class="author-item">
+                        <div class="author-logo">
+                            <img src="RISCstar_Logo.png" alt="RISCstar Solutions Logo">
+                        </div>
+                        <div class="author-info">
+                            <strong>GUODONG XU</strong>
+                            RISCstar Solutions
+                            <div class="author-links">
+                                EMAIL: <a href="mailto:guodong@riscstar.com">guodong@riscstar.com</a><br>
+                                LINKEDIN: <a href="https://www.linkedin.com/in/docularxu/" target="_blank" rel="noopener">https://www.linkedin.com/in/docularxu/</a><br>
+                                GITHUB: <a href="https://www.github.org/docularxu" target="_blank" rel="noopener">https://www.github.org/docularxu</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="author-item">
+                        <div class="author-logo">
+                            <img src="fvf-logo.webp" alt="Fedora-V Force Team Logo">
+                        </div>
+                        <div class="author-info">
+                            <strong>HAIBIN LIU</strong>
+                            Southeast University
+                            <div class="author-links">
+                                EMAIL: <a href="mailto:haibin.liu@seu.edu.cn">haibin.liu@seu.edu.cn</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="detail-section" style="margin: 20px 30px; padding: 20px;">
+                <h3 style="font-size: 1.3em; margin-top: 0;">OpenBLAS Version Under Test</h3>
+                <p>Benchmarks were captured from <strong><a href="https://github.com/OpenMathLib/OpenBLAS/releases/tag/v0.3.30" target="_blank" rel="noopener">OpenBLAS 0.3.30</a></strong> (official release), which was released on June 19, 2025.</p>
+                <p>Tag commit hash: <code>993fad6aebbce34a97d3f8c34d6d79d35b64cc48</code></p>
+                <p>Commit link: <a href="https://github.com/OpenMathLib/OpenBLAS/commit/993fad6aebbce34a97d3f8c34d6d79d35b64cc48" target="_blank" rel="noopener">https://github.com/OpenMathLib/OpenBLAS/commit/993fad6aebbce34a97d3f8c34d6d79d35b64cc48</a></p>
+            </section>
+
+            <section style="margin: 20px 30px; padding: 20px; background-color: #fcfcfc; border-radius: 10px;">
+                <h3 style="font-size: 1.3em; margin-top: 0; color: #2c3e50;">Benchmark Environment</h3>
+                <div class="env-grid">
+                    <div class="env-card software">
+                        <div class="env-title">Software Platform</div>
+                        <div class="env-logos">
+                            <div class="env-logo">
+                                <img src="fedora_remix_logo.png" alt="Fedora Remix Logo">
+                            </div>
+                            <div class="env-logo">
+                                <img src="fvf-logo.webp" alt="Fedora-V Force Team Logo">
+                            </div>
+                        </div>
+                        <h3>Fedora 42 Remix</h3>
+                        <p>Released by the Fedora-V Force team.</p>
+                        <p>Download link:
+                            <a href="https://images.fedoravforce.org" target="_blank" rel="noopener">images.fedoravforce.org</a>
+                        </p>
+                    </div>
+                    <div class="env-card hardware">
+                        <div class="env-title">Hardware Platform</div>
+                        <div class="env-logos">
+                            <div class="env-logo">
+                                <img src="K1_SoC-scaled.jpg" alt="K1 SoC Logo">
+                            </div>
+                        </div>
+                        <h3>K1 SoC (RISC-V)</h3>
+                        <p>Manufactured by SpacemiT.</p>
+                        <p>CPU: 8 cores, model <strong>Spacemit® X60</strong>.</p>
+                        <p class="isa-profile">ISA Profile:<br>
+                            rv64imafdcv_zicbom_zicboz_zicntr_zicond_zicsr_zifencei_zihintpause_zihpm<br>
+                            zfh_zfhmin_zca_zcd_zba_zbb_zbc_zbs_zkt_zve32f_zve32x<br>
+                            zve64d_zve64f_zve64x_zvfh_zvfhmin_zvkt_sscofpmf_sstc<br>
+                            svinval_svnapot_svpbmt
+                        </p>
+                        <p>MMU Mode: sv39.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="detail-section" style="margin: 20px 30px; padding: 25px;">
+                <h3 style="font-size: 1.4em; margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">Theoretical Performance Analysis</h3>
+                
+                <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #3b82f6;">
+                    <h4 style="margin-top: 0; color: #1e3a5f; font-size: 1.1em;">K1 SoC Vector Register Architecture (256-bit VLEN)</h4>
+                    
+                    <!-- Visual representation of 256-bit register -->
+                    <div style="margin: 20px 0;">
+                        <div style="margin-bottom: 25px;">
+                            <p style="font-weight: 600; margin-bottom: 10px; color: #1e40af;">Single Precision (32-bit): 8 elements per vector register</p>
+                            <div style="display: flex; gap: 2px; margin-bottom: 5px;">
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">32b</div>
+                            </div>
+                            <div style="text-align: center; margin-top: 8px; color: #059669; font-weight: 600; font-size: 0.95em;">
+                                256 bits total → <strong style="font-size: 1.1em;">8x theoretical speedup</strong>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <p style="font-weight: 600; margin-bottom: 10px; color: #1e40af;">Double Precision (64-bit): 4 elements per vector register</p>
+                            <div style="display: flex; gap: 2px; margin-bottom: 5px;">
+                                <div style="flex: 1; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">64 bits</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">64 bits</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">64 bits</div>
+                                <div style="flex: 1; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 15px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">64 bits</div>
+                            </div>
+                            <div style="text-align: center; margin-top: 8px; color: #1d4ed8; font-weight: 600; font-size: 0.95em;">
+                                256 bits total → <strong style="font-size: 1.1em;">4x theoretical speedup</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px; padding: 12px; background-color: #e0f2fe; border-radius: 6px; border-left: 3px solid #0284c7;">
+                        <p style="margin: 0; color: #0c4a6e; font-size: 0.9em; line-height: 1.6;">
+                            <strong>Note:</strong> K1 SoC (Spacemit® X60) implements the RISC-V Vector Extension with VLEN=256 bits, supporting both single and double precision floating-point operations through the RVV instruction set.
+                        </p>
+                    </div>
+                </div>
+
+                <h3 style="font-size: 1.3em; margin-top: 25px; margin-bottom: 15px; color: #1e3a5f;">Key Findings</h3>
+
+                <div style="margin-bottom: 25px;">
+                    <h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>1. Practical vs. Theoretical: Performance Gap, Current RVV implementations achieve only 39-48% of theoretical peak</strong></h4>
+                    <ul style="color: #555; line-height: 1.8; margin-left: 20px;">
+                        <li>SGEMM: 3.1x actual speedup vs 8x theoretical = <strong style="color: #dc2626;">38.9% efficiency</strong> (35,989 vs 11,546 MFLOPS on ZVL256B)</li>
+                        <li>DGEMM: 1.9x actual speedup vs 4x theoretical = <strong style="color: #dc2626;">47.5% efficiency</strong> (15,857 vs 8,175 MFLOPS on ZVL256B)</li>
+                        <li>DGEMM better utilizes available vector parallelism</li>
+                        <li><strong>Implication:</strong> Limitation could be in memory bandwidth, register pressure, and kernel design. SGEMM's 8-wide operations likely face more severe register pressure and memory bandwidth bottlenecks on the K1 platform</li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 25px;">
+                    <h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>2. Vector Length (VLEN) Gain: Longer is better, But, doubling Shows Diminishing Returns</strong></h4>
+                    <ul style="color: #555; line-height: 1.8; margin-left: 20px;">
+                        <li>ZVL256B vs ZVL128B gains fall short of 2x</li>
+                        <li>SGEMM: ZVL256B achieves only <strong style="color: #d97706;">1.22x</strong> over ZVL128B (should be ~2x if perfectly scaling)</li>
+                        <li>DGEMM: ZVL256B achieves <strong style="color: #d97706;">1.37x</strong> over ZVL128B (also below ideal 2x)</li>
+                        <li><strong>Key insight:</strong> Memory subsystem bandwidth, not compute capacity, is the primary bottleneck for GEMM on K1 — wider vectors can't be fed fast enough</li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 25px;">
+                    <h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>3. For computing intensive kernels, i.e. GEMM, LMUL provides minimal benefit and sometimes hurts performance</strong></h4>
+                    <ul style="color: #555; line-height: 1.8; margin-left: 20px;">
+                        <li><strong>Only benefit:</strong> DGEMM on ZVL128B sees <strong style="color: #059669;">modest 8% improvement</strong> with LMUL=4, compensating for narrow 128-bit vectors</li>
+                        <li><strong>Matrix-size dependency:</strong> LMUL=2 shows <strong style="color: #059669;">11% gain for SGEMM ZVL128B at 256×256</strong> (22,805 vs 20,482 MFLOPS) but <strong style="color: #dc2626;">3% degradation at 4096×4096</strong> (28,696 vs 29,451 MFLOPS)</li>
+                        <li><strong>Consistent degradation:</strong> Higher LMUL shows <strong style="color: #dc2626;">2-3% performance loss</strong> at large matrix sizes (4096×4096) in 3 out of 4 configurations (DGEMM ZVL256B, both SGEMM cases)</li>
+                        <li><strong>Root cause:</strong> Increasing LMUL multiplies architectural register count but creates register pressure, limiting the compiler's ability to keep critical values in registers and forcing more memory traffic</li>
+                    </ul>
+                    
+                    <!-- Critical Recommendation Callout -->
+                    <div style="margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-radius: 10px; border: 3px solid #10b981; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <div style="font-size: 2em; margin-right: 12px;">💡</div>
+                            <h4 style="margin: 0; color: #065f46; font-size: 1.15em; font-weight: 700;">Critical Recommendation: Matrix-Size Adaptive Tuning</h4>
+                        </div>
+                        <p style="margin: 0; color: #047857; font-size: 1em; line-height: 1.7; font-weight: 600;">
+                            For <strong style="background-color: #a7f3d0; padding: 2px 6px; border-radius: 3px;">production deployments on K1</strong>, implement <strong style="font-size: 1.1em; color: #065f46; text-decoration: underline; text-decoration-color: #10b981;">matrix-size adaptive LMUL selection</strong>:
+                        </p>
+                        <div style="margin-top: 15px; padding: 15px; background-color: white; border-radius: 6px; border-left: 4px solid #10b981;">
+                            <ul style="color: #065f46; line-height: 2; margin: 0; font-size: 0.95em; font-weight: 500;">
+                                <li><strong>Small matrices (&lt;1024):</strong> Use <code style="background-color: #d1fae5; padding: 2px 6px; border-radius: 3px; font-weight: 700;">LMUL=2</code></li>
+                                <li><strong>Large matrices (≥1024):</strong> Use <code style="background-color: #d1fae5; padding: 2px 6px; border-radius: 3px; font-weight: 700;">LMUL=1</code></li>
+                                <li><strong>Exception - DGEMM ZVL128B:</strong> Always use <code style="background-color: #d1fae5; padding: 2px 6px; border-radius: 3px; font-weight: 700;">LMUL=4</code> (8% gain)</li>
+                            </ul>
+                        </div>
+                        <p style="margin: 15px 0 0 0; color: #047857; font-size: 0.9em; font-style: italic;">
+                            <strong>Impact:</strong> This strategy maximizes performance across all matrix sizes by balancing register pressure and computational throughput.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <h4 style="margin-top: 0; color: #92400e; font-size: 1em;"><strong>LMUL Analysis Summary:</strong></h4>
+                    <p style="margin: 5px 0 10px 0; color: #92400e; font-size: 0.9em;"><strong>At 4096×4096 (large matrices):</strong></p>
+                    <ul style="color: #78350f; line-height: 1.7; margin-left: 20px; font-size: 0.95em;">
+                        <li><strong>DGEMM ZVL128B:</strong> LMUL=4 (11,552 MFLOPS) vs LMUL=1 (10,686 MFLOPS) = <strong style="color: #059669;">1.08x gain</strong></li>
+                        <li><strong>DGEMM ZVL256B:</strong> LMUL=2 (15,388 MFLOPS) vs LMUL=1 (15,857 MFLOPS) = <strong style="color: #dc2626;">0.97x (3% slower!)</strong></li>
+                        <li><strong>SGEMM ZVL128B:</strong> LMUL=2 (28,696 MFLOPS) vs LMUL=1 (29,451 MFLOPS) = <strong style="color: #dc2626;">0.97x (3% slower)</strong></li>
+                        <li><strong>SGEMM ZVL256B:</strong> LMUL=2 (35,813 MFLOPS) vs LMUL=1 (35,989 MFLOPS) = <strong style="color: #dc2626;">0.995x (0.5% slower)</strong></li>
+                    </ul>
+                    <p style="margin: 15px 0 5px 0; color: #92400e; font-size: 0.9em;"><strong>At 256×256 (small matrices):</strong></p>
+                    <ul style="color: #78350f; line-height: 1.7; margin-left: 20px; font-size: 0.95em;">
+                        <li><strong>DGEMM ZVL256B:</strong> LMUL=2 (12,243 MFLOPS) vs LMUL=1 (12,536 MFLOPS) = <strong style="color: #059669;">0.98x (close)</strong></li>
+                        <li><strong>SGEMM ZVL128B:</strong> LMUL=2 (22,805 MFLOPS) vs LMUL=1 (20,482 MFLOPS) = <strong style="color: #059669;">1.11x gain! 📈</strong></li>
+                    </ul>
+                </div>
+            </section>
+
+            <div id="analysis-output" class="p-6">
+                <p class="text-gray-600">Loading and analyzing data...</p>
+            </div>
+        </div>
+
+        </div>
+
+        <div id="chart-mflops-container" class="card p-6 mb-8 chart-visual">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Raw Performance (MFLOPS vs. Matrix Size)</h2>
+            
+            <!-- Dual Chart Container for MFLOPS -->
+            <div class="flex flex-col lg:flex-row gap-6">
+                <!-- DGEMM Chart -->
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">DGEMM (Double Precision) - MFLOPS</h3>
+                    <canvas id="dgemm-chart"></canvas>
+                </div>
+                <!-- SGEMM Chart -->
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">SGEMM (Single Precision) - MFLOPS</h3>
+                    <canvas id="sgemm-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="chart-speedup-container" class="card p-6 mb-8 chart-visual">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Speedup Analysis (vs. GENERIC Time)</h2>
+            
+            <!-- Dual Chart Container for Speedup -->
+            <div class="flex flex-col lg:flex-row gap-6">
+                <!-- DGEMM Speedup Chart -->
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">DGEMM (Double Precision) - Speedup (GENERIC = 1.0x)</h3>
+                    <canvas id="dgemm-speedup-chart"></canvas>
+                </div>
+                <!-- SGEMM Speedup Chart -->
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">SGEMM (Single Precision) - Speedup (GENERIC = 1.0x)</h3>
+                    <canvas id="sgemm-speedup-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Raw Data (Matrix Size 256 - 4096)</h2>
+            <div class="overflow-x-auto">
+                <table id="raw-data-table" class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">Precision</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LMUL</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Matrix Size</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Flops (MFLOPS)</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">Time (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RISC-V Vector Concepts Section -->
+        <div class="card p-6 mb-8" style="margin-top: 20px;">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">📚 RISC-V Vector Concepts Reference</h2>
+            <p style="color: #555; margin-bottom: 20px;">This section provides background on RISC-V Vector architecture concepts referenced in the analysis above.</p>
+            
+            <div style="background-color: #fefce8; padding: 20px; border-radius: 8px; border-left: 4px solid #eab308;">
+                <h4 style="margin-top: 0; color: #713f12; font-size: 1.1em;">Register Grouping (LMUL) & Vector Length Control</h4>
+                
+                <!-- LMUL Visualization -->
+                <div style="margin: 20px 0;">
+                    <p style="font-weight: 600; margin-bottom: 15px; color: #854d0e; font-size: 1.05em;">1. Register Grouping (LMUL - Length Multiplier)</p>
+                    <p style="color: #78350f; font-size: 0.9em; margin-bottom: 15px;">LMUL allows grouping multiple physical vector registers to process more data per instruction.</p>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <p style="font-weight: 600; margin-bottom: 8px; color: #854d0e; font-size: 0.95em;">LMUL=1 (No grouping): 1 register</p>
+                        <div style="max-width: 400px;">
+                            <div style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); padding: 12px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">v0 (256 bits)</div>
+                        </div>
+                        <p style="margin-top: 5px; color: #713f12; font-size: 0.85em;">256 bits of data per operation</p>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <p style="font-weight: 600; margin-bottom: 8px; color: #854d0e; font-size: 0.95em;">LMUL=2 (2 registers grouped): 2× data per instruction</p>
+                        <div style="max-width: 400px; display: flex; flex-direction: column; gap: 3px;">
+                            <div style="background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); padding: 12px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">v0 (256 bits)</div>
+                            <div style="background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); padding: 12px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">v1 (256 bits)</div>
+                        </div>
+                        <p style="margin-top: 5px; color: #713f12; font-size: 0.85em;">512 bits of data per operation (2× wider)</p>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <p style="font-weight: 600; margin-bottom: 8px; color: #854d0e; font-size: 0.95em;">LMUL=4 (4 registers grouped): 4× data per instruction</p>
+                        <div style="max-width: 400px; display: flex; flex-direction: column; gap: 3px;">
+                            <div style="background: linear-gradient(135deg, #f97316 0%, #c2410c 100%); padding: 12px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">v0 (256 bits)</div>
+                            <div style="background: linear-gradient(135deg, #f97316 0%, #c2410c 100%); padding: 12px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">v1 (256 bits)</div>
+                            <div style="background: linear-gradient(135deg, #f97316 0%, #c2410c 100%); padding: 12px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">v2 (256 bits)</div>
+                            <div style="background: linear-gradient(135deg, #f97316 0%, #c2410c 100%); padding: 12px; text-align: center; color: white; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">v3 (256 bits)</div>
+                        </div>
+                        <p style="margin-top: 5px; color: #713f12; font-size: 0.85em;">1024 bits of data per operation (4× wider)</p>
+                    </div>
+
+                    <div style="background-color: #fef9c3; padding: 10px; border-radius: 6px; border-left: 3px solid #ca8a04;">
+                        <p style="margin: 0; color: #713f12; font-size: 0.85em; line-height: 1.5;">
+                            <strong>Trade-off:</strong> Higher LMUL processes more data per instruction but reduces available register count. On a 32-register system: LMUL=1 gives 32 vector groups, LMUL=2 gives 16 groups, LMUL=4 gives 8 groups.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Vector Length Control -->
+                <div style="margin: 25px 0 0 0;">
+                    <p style="font-weight: 600; margin-bottom: 15px; color: #854d0e; font-size: 1.05em;">2. Vector Length Control (VLEN - Implementation-defined)</p>
+                    <p style="color: #78350f; font-size: 0.9em; margin-bottom: 15px;">RISC-V Vector allows implementations to choose their vector register width (VLEN). Common values:</p>
+                    
+                    <div style="max-width: 600px;">
+                        <div style="margin-bottom: 15px;">
+                            <p style="font-weight: 600; margin-bottom: 8px; color: #854d0e; font-size: 0.9em;">ZVL128B: VLEN = 128 bits</p>
+                            <div style="width: 33.33%;">
+                                <div style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 10px; text-align: center; color: white; font-size: 0.85em; border-radius: 4px;">128b</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <p style="font-weight: 600; margin-bottom: 8px; color: #854d0e; font-size: 0.9em;">ZVL256B: VLEN = 256 bits (K1 SoC)</p>
+                            <div style="width: 66.67%;">
+                                <div style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); padding: 10px; text-align: center; color: white; font-size: 0.85em; border-radius: 4px;">256b</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <p style="font-weight: 600; margin-bottom: 8px; color: #854d0e; font-size: 0.9em;">ZVL512B: VLEN = 512 bits</p>
+                            <div style="width: 100%;">
+                                <div style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); padding: 10px; text-align: center; color: white; font-size: 0.85em; border-radius: 4px;">512b</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background-color: #fef9c3; padding: 10px; border-radius: 6px; border-left: 3px solid #ca8a04; margin-top: 15px;">
+                        <p style="margin: 0; color: #713f12; font-size: 0.85em; line-height: 1.5;">
+                            <strong>Portability:</strong> RISC-V Vector code is VLEN-agnostic. The same binary runs on different VLEN implementations, automatically utilizing the available vector width through runtime detection.
+                        </p>
+                    </div>
+
+                    <!-- AVL Constraint Explanation -->
+                    <div style="margin-top: 25px; padding: 15px; background-color: #f0f9ff; border-radius: 8px; border: 2px solid #3b82f6;">
+                        <p style="font-weight: 600; margin-top: 0; margin-bottom: 12px; color: #1e3a8a; font-size: 1em;">💡 Understanding Application Vector Length (AVL)</p>
+                        
+                        <p style="color: #1e40af; font-size: 0.9em; line-height: 1.6; margin-bottom: 12px;">
+                            RISC-V vectors are <strong>VLEN-agnostic</strong> through the <code>vsetvl</code> instruction, which takes an <strong>Application Vector Length (AVL)</strong> — the number of elements the software requests to process. The hardware returns the actual vector length (vl) based on this request and its capabilities.
+                        </p>
+
+                        <div style="background-color: #dbeafe; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+                            <p style="margin: 0 0 12px 0; font-weight: 600; color: #1e3a8a; font-size: 0.9em;">How vsetvl Works:</p>
+                            
+                            <!-- Visual Flow Diagram -->
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; gap: 10px;">
+                                <div style="flex: 1; background-color: #f0f9ff; padding: 15px; border-radius: 6px; border: 2px solid #3b82f6; text-align: center;">
+                                    <div style="font-size: 0.75em; color: #1e40af; margin-bottom: 8px; font-weight: 600;">Software Request</div>
+                                    <div style="font-family: monospace; font-size: 0.85em; color: #1e3a8a; font-weight: bold;">AVL = 8</div>
+                                    <div style="font-size: 0.7em; color: #64748b; margin-top: 4px;">elements needed</div>
+                                </div>
+                                
+                                <div style="font-size: 1.2em; color: #3b82f6;">→</div>
+                                
+                                <div style="flex: 1; background-color: #f0f9ff; padding: 15px; border-radius: 6px; border: 2px solid #8b5cf6; text-align: center;">
+                                    <div style="font-size: 0.75em; color: #6d28d9; margin-bottom: 8px; font-weight: 600;">vsetvl Calculation</div>
+                                    <div style="font-family: monospace; font-size: 0.75em; color: #7c3aed;">VLMAX = (LMUL×VLEN)/SEW</div>
+                                    <div style="font-family: monospace; font-size: 0.8em; color: #6d28d9; font-weight: bold; margin-top: 4px;">vl = min(AVL, VLMAX)</div>
+                                </div>
+                                
+                                <div style="font-size: 1.2em; color: #3b82f6;">→</div>
+                                
+                                <div style="flex: 1; background-color: #f0f9ff; padding: 15px; border-radius: 6px; border: 2px solid #059669; text-align: center;">
+                                    <div style="font-size: 0.75em; color: #065f46; margin-bottom: 8px; font-weight: 600;">Hardware Returns</div>
+                                    <div style="font-family: monospace; font-size: 0.85em; color: #047857; font-weight: bold;">vl</div>
+                                    <div style="font-size: 0.7em; color: #64748b; margin-top: 4px;">actual length</div>
+                                </div>
+                            </div>
+
+                            <div style="font-family: monospace; font-size: 0.85em; color: #1e40af; line-height: 1.8; padding-left: 10px;">
+                                <div style="margin-bottom: 6px;">✓ Vector operations process exactly <strong>vl</strong> elements</div>
+                                <div>✓ Same code adapts to different VLEN implementations</div>
+                            </div>
+                        </div>
+
+                        <div style="background-color: #e0e7ff; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+                            <p style="margin: 0 0 8px 0; font-weight: 600; color: #1e3a8a; font-size: 0.9em;">Concrete Example: SGEMM 8×8 Kernel</p>
+                            <div style="font-family: monospace; font-size: 0.85em; color: #1e40af; line-height: 1.8;">
+                                <div style="margin-bottom: 6px;"><strong>Kernel code:</strong> <code>vsetvl_e32m2(8)</code> ← Requests 8 elements</div>
+                                <div style="margin-bottom: 6px; padding-left: 20px;">• SEW = 32 bits (element width)</div>
+                                <div style="margin-bottom: 6px; padding-left: 20px;">• LMUL = 2 (register grouping)</div>
+                                <div style="margin-bottom: 6px; padding-left: 20px;">• AVL = 8 (requested by algorithm)</div>
+                            </div>
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #c7d2fe;">
+                                <table style="width: 100%; font-size: 0.85em; color: #1e40af;">
+                                    <tr style="background-color: #f0f9ff;">
+                                        <th style="padding: 6px; text-align: left; font-weight: 600;">Hardware</th>
+                                        <th style="padding: 6px; text-align: left; font-weight: 600;">VLMAX</th>
+                                        <th style="padding: 6px; text-align: left; font-weight: 600;">vl returned</th>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 6px;">VLEN=128 (ZVL128B)</td>
+                                        <td style="padding: 6px;">2 × 128 / 32 = 8</td>
+                                        <td style="padding: 6px;">min(8, 8) = <strong>8</strong></td>
+                                    </tr>
+                                    <tr style="background-color: #f0f9ff;">
+                                        <td style="padding: 6px;">VLEN=256 (K1)</td>
+                                        <td style="padding: 6px;">2 × 256 / 32 = 16</td>
+                                        <td style="padding: 6px;">min(8, 16) = <strong>8</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 6px;">VLEN=512</td>
+                                        <td style="padding: 6px;">2 × 512 / 32 = 32</td>
+                                        <td style="padding: 6px;">min(8, 32) = <strong>8</strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Visual Register Layout -->
+                            <div style="margin-top: 15px;">
+                                <p style="margin: 0 0 10px 0; font-weight: 600; color: #1e3a8a; font-size: 0.85em;">Visual: Register Element Layout (e32m2 - 2 registers grouped)</p>
+                                
+                                <!-- VLEN=128 -->
+                                <div style="margin-bottom: 15px; padding: 10px; background-color: #f8fafc; border-radius: 6px;">
+                                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 6px; font-weight: 600;">VLEN=128: VLMAX=8, vl=8</div>
+                                    <div style="margin-bottom: 4px;">
+                                        <div style="font-size: 0.7em; color: #64748b; margin-bottom: 2px;">Register 0 (4 element capacity):</div>
+                                        <div style="display: flex; gap: 2px;">
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">0</div>
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">1</div>
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">2</div>
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">3</div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7em; color: #64748b; margin-bottom: 2px;">Register 1 (4 element capacity):</div>
+                                        <div style="display: flex; gap: 2px;">
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">4</div>
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">5</div>
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">6</div>
+                                            <div style="width: 60px; background-color: #3b82f6; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">7</div>
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.7em; color: #3b82f6; margin-top: 6px;">Total: 8 elements (256 bits: 2 registers × 128 bits)</div>
+                                </div>
+
+                                <!-- VLEN=256 -->
+                                <div style="margin-bottom: 15px; padding: 10px; background-color: #f0fdf4; border-radius: 6px;">
+                                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 6px; font-weight: 600;">VLEN=256 (K1): VLMAX=16, vl=8 (constrained by AVL)</div>
+                                    <div style="margin-bottom: 4px;">
+                                        <div style="font-size: 0.7em; color: #64748b; margin-bottom: 2px;">Register 0 (8 element capacity):</div>
+                                        <div style="display: flex; gap: 2px;">
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">0</div>
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">1</div>
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">2</div>
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">3</div>
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">4</div>
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">5</div>
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">6</div>
+                                            <div style="width: 60px; background-color: #10b981; padding: 10px 4px; text-align: center; color: white; font-size: 0.75em; border-radius: 3px;">7</div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7em; color: #64748b; margin-bottom: 2px;">Register 1 (8 element capacity):</div>
+                                        <div style="display: flex; gap: 2px;">
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 4px; text-align: center; color: #64748b; font-size: 0.75em; border-radius: 3px;">·</div>
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.7em; margin-top: 6px;">
+                                        <span style="color: #10b981;">8 elements processed (vl)</span> | <span style="color: #94a3b8;">8 available but not used</span>
+                                    </div>
+                                    <div style="font-size: 0.7em; color: #64748b; margin-top: 2px;">Total: 512 bits (2 registers × 256 bits)</div>
+                                </div>
+
+                                <!-- VLEN=512 -->
+                                <div style="margin-bottom: 10px; padding: 10px; background-color: #faf5ff; border-radius: 6px;">
+                                    <div style="font-size: 0.75em; color: #64748b; margin-bottom: 6px; font-weight: 600;">VLEN=512: VLMAX=32, vl=8 (constrained by AVL)</div>
+                                    <div style="margin-bottom: 4px;">
+                                        <div style="font-size: 0.7em; color: #64748b; margin-bottom: 2px;">Register 0 (16 element capacity):</div>
+                                        <div style="display: flex; gap: 2px;">
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">0</div>
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">1</div>
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">2</div>
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">3</div>
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">4</div>
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">5</div>
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">6</div>
+                                            <div style="width: 60px; background-color: #8b5cf6; padding: 10px 2px; text-align: center; color: white; font-size: 0.7em; border-radius: 3px;">7</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7em; color: #64748b; margin-bottom: 2px;">Register 1 (16 element capacity):</div>
+                                        <div style="display: flex; gap: 2px;">
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                            <div style="width: 60px; background-color: #cbd5e1; padding: 10px 2px; text-align: center; color: #94a3b8; font-size: 0.7em; border-radius: 3px;">·</div>
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.7em; color: #64748b; margin-top: 6px;">Total: 1024 bits (2 registers × 512 bits)</div>
+                                </div>
+
+                                <div style="margin-top: 10px; font-size: 0.75em; color: #64748b; padding: 8px; background-color: #f8fafc; border-radius: 4px;">
+                                    <strong>Legend:</strong> Colored boxes = elements processed (vl) | Light gray = available capacity not used | LMUL=2 means 2 physical registers are grouped together
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background-color: #e0f2fe; padding: 10px; border-radius: 6px; border-left: 3px solid #0ea5e9;">
+                            <p style="margin: 0; color: #0c4a6e; font-size: 0.85em; line-height: 1.6;">
+                                <strong>Key Point:</strong> The same kernel binary runs on all hardware, but the actual vector length (vl) is determined by both the <strong>software's request (AVL)</strong> and the <strong>hardware's capability (VLMAX)</strong>. The hardware can only provide what the software asks for, even if it's capable of more.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Chart.js for visualization (Moved to the end of body for guaranteed loading order) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+
+    <script>
+        // The raw CSV data has been updated with the complete dataset from the CSV file.
+        const csvData = `Precision (Double or Single),Target,LMUL,Matix Size,Flops,Time
+DGEMM,GENERIC,N/A,256,5744.864166,0.058408
+DGEMM,GENERIC,N/A,512,5740.88085,0.467586
+DGEMM,GENERIC,N/A,1024,6928.944725,3.099294
+DGEMM,GENERIC,N/A,2048,7801.949298,22.01997
+DGEMM,GENERIC,N/A,4096,8175.584491,168.109025
+DGEMM,ZVL128B,1,256,7445.425913,0.045067
+DGEMM,ZVL128B,1,512,7766.367441,0.345638
+DGEMM,ZVL128B,1,1024,9290.538995,2.311474
+DGEMM,ZVL128B,1,2048,10242.11428,16.773753
+DGEMM,ZVL128B,1,4096,10686.50081,128.609875
+DGEMM,ZVL128B,4,256,5764.08525,0.058213
+DGEMM,ZVL128B,4,512,8356.650029,0.321224
+DGEMM,ZVL128B,4,1024,9336.408051,2.300118
+DGEMM,ZVL128B,4,2048,10633.38813,16.156534
+DGEMM,ZVL128B,4,4096,11552.38983,118.970149
+DGEMM,ZVL256B,1,256,12536.22116,0.026766
+DGEMM,ZVL256B,1,512,13080.71914,0.205215
+DGEMM,ZVL256B,1,1024,13677.08942,1.570132
+DGEMM,ZVL256B,1,2048,15685.96168,10.952385
+DGEMM,ZVL256B,1,4096,15857.0732,86.673595
+DGEMM,ZVL256B,2,256,12242.79283,0.027407
+DGEMM,ZVL256B,2,512,11772.262198,0.228024
+DGEMM,ZVL256B,2,1024,12540.12913,1.712489
+DGEMM,ZVL256B,2,2048,14669.046575,11.711647
+DGEMM,ZVL256B,2,4096,15387.911764,89.316182
+SGEMM,GENERIC,N/A,256,9311.164976,0.036037
+SGEMM,GENERIC,N/A,512,9771.353946,0.274717
+SGEMM,GENERIC,N/A,1024,10517.27087,2.041864
+SGEMM,GENERIC,N/A,2048,11166.30351,15.385458
+SGEMM,GENERIC,N/A,4096,11546.7452,119.028307
+SGEMM,ZVL128B,1,256,20482.22524,0.016382
+SGEMM,ZVL128B,1,512,26030.1071,0.103125
+SGEMM,ZVL128B,1,1024,27216.4384,0.789039
+SGEMM,ZVL128B,1,2048,28375.31915,6.054511
+SGEMM,ZVL128B,1,4096,29451.95144,46.665483
+SGEMM,ZVL128B,2,256,22805.08597,0.014714
+SGEMM,ZVL128B,2,512,24970.881091,0.107499
+SGEMM,ZVL128B,2,1024,26118.111018,0.82222
+SGEMM,ZVL128B,2,2048,27460.647479,6.256178
+SGEMM,ZVL128B,2,4096,28696.241679,47.894409
+SGEMM,ZVL256B,1,256,31408.56434,0.010683
+SGEMM,ZVL256B,1,512,34739.49384,0.077271
+SGEMM,ZVL256B,1,1024,34680.81435,0.619214
+SGEMM,ZVL256B,1,2048,35878.08492,4.788402
+SGEMM,ZVL256B,1,4096,35989.18905,38.188955
+SGEMM,ZVL256B,2,256,31416.40431,0.010681
+SGEMM,ZVL256B,2,512,35077.51342,0.076526
+SGEMM,ZVL256B,2,1024,32903.05193,0.65267
+SGEMM,ZVL256B,2,2048,32846.4242,5.230362
+SGEMM,ZVL256B,2,4096,35813.57956,38.376212
+`;
+
+        const PEAK_SIZE = 4096; // Focusing analysis on the largest matrix size
+
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+
+            // Determine the number of columns expected (ignore the 'speed up' column if present)
+            const numExpectedHeaders = headers.length > 6 ? 6 : headers.length; 
+
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+                // Safely split and fill in blanks from the row above (if applicable)
+                const rawValues = lines[i].split(',').map(v => v.trim());
+                const values = [];
+
+                // Use the previous row's values for empty cells in the first three columns
+                if (data.length > 0) {
+                    const lastRow = data[data.length - 1];
+                    values.push(rawValues[0] === '' ? lastRow.Precision : rawValues[0]);
+                    values.push(rawValues[1] === '' ? lastRow.Target : rawValues[1]);
+                    values.push(rawValues[2] === '' ? lastRow.LMUL.toString() : rawValues[2]);
+                } else {
+                    // First row
+                    values.push(rawValues[0]);
+                    values.push(rawValues[1]);
+                    values.push(rawValues[2]);
+                }
+
+                // Add the remaining values (Matrix Size, Flops, Time)
+                // Adjust index for rows that only contain data starting from column 3
+                let dataStartIdx = (rawValues[0] === '' && rawValues[1] === '' && rawValues[2] === '') ? 3 : 3;
+
+                // Push Matrix Size, Flops, Time (ignoring the 'speed up' column if it's the 7th element)
+                values.push(rawValues[dataStartIdx]);
+                values.push(rawValues[dataStartIdx + 1]);
+                values.push(rawValues[dataStartIdx + 2]); 
+                
+                const row = {};
+                row['Precision (Double or Single)'] = values[0];
+                row['Target'] = values[1];
+                row['LMUL'] = values[2];
+                row['Matix Size'] = values[3];
+                row['Flops'] = values[4];
+                row['Time'] = values[5];
+                
+                // Final clean up and type cast
+                data.push({
+                    Precision: row['Precision (Double or Single)'],
+                    Target: row['Target'],
+                    LMUL: row['LMUL'] === 'N/A' ? 'N/A' : parseFloat(row['LMUL']),
+                    MatrixSize: parseInt(row['Matix Size']),
+                    Flops: parseFloat(row['Flops']),
+                    Time: parseFloat(row['Time'])
+                });
+            }
+            return data.filter(d => !isNaN(d.MatrixSize)); // Filter out any empty rows resulting from the parse
+        }
+
+
+        // --- MFLOPS Configurations (Optimized for Readability) ---
+        // Updated labels to use "LMUL=X" format - showing best performing configurations
+        const DGEMM_CONFIGS = [
+            { key: 'DGEMM-GENERIC-N/A', label: 'GENERIC', color: '#60A5FA' },
+            { key: 'DGEMM-ZVL128B-4', label: 'ZVL128B (LMUL=4)', color: '#3B82F6' },
+            { key: 'DGEMM-ZVL256B-1', label: 'ZVL256B (LMUL=1)', color: '#1D4ED8' },
+        ];
+
+        const SGEMM_CONFIGS = [
+            { key: 'SGEMM-GENERIC-N/A', label: 'GENERIC', color: '#6EE7B7' },
+            { key: 'SGEMM-ZVL128B-1', label: 'ZVL128B (LMUL=1)', color: '#10B981' },
+            { key: 'SGEMM-ZVL256B-1', label: 'ZVL256B (LMUL=1)', color: '#059669' },
+        ];
+
+        // --- SPEEDUP Configurations (All LMULs) ---
+        // Updated labels to use "LMUL=X" format
+        const DGEMM_SPEEDUP_CONFIGS = [
+            { key: 'DGEMM-GENERIC-N/A', label: 'GENERIC (1.0x Baseline)', color: '#60A5FA' }, // Blue
+            { key: 'DGEMM-ZVL128B-1', label: 'ZVL128B (LMUL=1)', color: '#10B981' }, // Green
+            { key: 'DGEMM-ZVL128B-4', label: 'ZVL128B (LMUL=4)', color: '#059669' }, // Dark Green
+            { key: 'DGEMM-ZVL256B-1', label: 'ZVL256B (LMUL=1)', color: '#FCD34D' }, // Yellow
+            { key: 'DGEMM-ZVL256B-2', label: 'ZVL256B (LMUL=2)', color: '#F59E0B' }, // Orange
+        ];
+
+        const SGEMM_SPEEDUP_CONFIGS = [
+            { key: 'SGEMM-GENERIC-N/A', label: 'GENERIC (1.0x Baseline)', color: '#6EE7B7' }, // Light Teal
+            { key: 'SGEMM-ZVL128B-1', label: 'ZVL128B (LMUL=1)', color: '#EF4444' }, // Red
+            { key: 'SGEMM-ZVL128B-2', label: 'ZVL128B (LMUL=2)', color: '#B91C1C' }, // Dark Red
+            { key: 'SGEMM-ZVL256B-1', label: 'ZVL256B (LMUL=1)', color: '#8B5CF6' }, // Purple
+            { key: 'SGEMM-ZVL256B-2', label: 'ZVL256B (LMUL=2)', color: '#7C3AED' }, // Dark Purple
+        ];
+
+
+        function prepareChartData(data, configurations, isSpeedup) {
+            const matrixSizes = [...new Set(data.map(d => d.MatrixSize))].sort((a, b) => a - b);
+            
+            const datasets = configurations.map(config => {
+                const parts = config.key.split('-');
+                const precision = parts[0];
+                const target = parts[1];
+                const lmul = parts[2];
+                
+                const dataPoints = matrixSizes.map(size => {
+                    const configRow = data.find(d => 
+                        d.Precision === precision && 
+                        d.Target === target && 
+                        (lmul === 'N/A' ? d.LMUL === 'N/A' : d.LMUL === parseFloat(lmul)) && 
+                        d.MatrixSize === size
+                    );
+
+                    if (!configRow) return 0; // Data point missing
+
+                    if (isSpeedup) {
+                        // Find the generic baseline time for the current size and precision
+                        const genericRow = data.find(d => 
+                            d.Precision === precision && 
+                            d.Target === 'GENERIC' && 
+                            d.MatrixSize === size
+                        );
+
+                        if (configRow.Target === 'GENERIC') return 1.0;
+                        
+                        if (genericRow && genericRow.Time > 0 && configRow.Time > 0) {
+                            // Speedup = Generic_Time / Config_Time
+                            return genericRow.Time / configRow.Time;
+                        }
+                        return 0; // Use 0 if baseline is missing or time is zero
+                    } else {
+                        return configRow.Flops; // Return MFLOPS for the raw performance chart
+                    }
+                });
+
+                return {
+                    label: config.label,
+                    data: dataPoints,
+                    backgroundColor: config.color,
+                    borderColor: config.color,
+                    borderWidth: 1,
+                };
+            });
+
+            return {
+                labels: matrixSizes.map(size => `Size ${size}`),
+                datasets: datasets,
+            };
+        }
+
+        // Variable to store chart instances globally (or scoped to the app)
+        const chartInstances = {};
+
+        function createChart(canvasId, chartData, yAxisTitle, tooltipSuffix, yMin = 0, isSpeedupChart = false) {
+            // Check if Chart is defined before attempting to use it
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js library is not loaded.');
+                return;
+            }
+
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // FIX: Check if a chart instance already exists on this canvas and destroy it
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+
+            // Define a local plugin for the 1.0x baseline line
+            const baselinePlugin = {
+                id: 'baselineLine',
+                beforeDraw: (chart) => {
+                    if (isSpeedupChart && chart.options.scales.y.min === 0) {
+                        const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
+                        
+                        // Check if 1.0 is within the visible range
+                        if (y.max >= 1.0 && y.min <= 1.0) {
+                            const yCoord = y.getPixelForValue(1.0);
+                            
+                            ctx.save();
+                            ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; // Red-500
+                            ctx.lineWidth = 2;
+                            ctx.setLineDash([5, 5]); // Dashed line
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(left, yCoord);
+                            ctx.lineTo(right, yCoord);
+                            ctx.stroke();
+                            
+                            ctx.fillStyle = 'rgba(239, 68, 68, 1)';
+                            ctx.font = 'bold 10px Inter';
+                            ctx.textAlign = 'left';
+                            ctx.fillText('1.0x Baseline', left + 5, yCoord - 5);
+
+                            ctx.restore();
+                        }
+                    }
+                }
+            };
+            
+            const plugins = isSpeedupChart ? [baselinePlugin] : [];
+
+
+            const newChart = new Chart(ctx, { // Store the new chart instance
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        title: {
+                            display: false, // Title moved to HTML <h3> tag
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += context.parsed.y.toFixed(2) + tooltipSuffix;
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Matrix Size (N)',
+                                font: { size: 12 }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: yAxisTitle,
+                                font: { size: 12 }
+                            },
+                            beginAtZero: true,
+                            min: yMin 
+                        }
+                    }
+                },
+                plugins: plugins // Pass the custom plugin here
+            });
+            
+            // Store the new chart instance
+            chartInstances[canvasId] = newChart;
+        }
+
+        function analyzeData(data) {
+            const peakData = data.filter(d => d.MatrixSize === PEAK_SIZE);
+            const peakFlops = {};
+
+            peakData.forEach(d => {
+                // Key format: Precision-Target-LMUL
+                const lmulKey = d.LMUL === 'N/A' ? 'N/A' : d.LMUL.toString();
+                const key = `${d.Precision}-${d.Target}-${lmulKey}`;
+                peakFlops[key] = parseFloat(d.Flops);
+            });
+            
+            // DGEMM Metrics (using best performing LMUL for each target)
+            const dgemmGeneric = peakFlops['DGEMM-GENERIC-N/A'];
+            const dgemmZVL128B_1 = peakFlops['DGEMM-ZVL128B-1']; 
+            const dgemmZVL128B_4 = peakFlops['DGEMM-ZVL128B-4']; 
+            const dgemmZVL256B = peakFlops['DGEMM-ZVL256B-1']; 
+            
+            // SGEMM Metrics (using best performing LMUL for each target)
+            const sgemmGeneric = peakFlops['SGEMM-GENERIC-N/A'];
+            const sgemmZVL128B_1 = peakFlops['SGEMM-ZVL128B-1']; 
+            const sgemmZVL128B_2 = peakFlops['SGEMM-ZVL128B-2']; 
+            const sgemmZVL256B_1 = peakFlops['SGEMM-ZVL256B-1'];
+            const sgemmZVL256B_2 = peakFlops['SGEMM-ZVL256B-2'];
+            
+            // Recalculate Speedups based on complete data
+            const dgemmGenericTime = data.find(d => d.Precision === 'DGEMM' && d.Target === 'GENERIC' && d.MatrixSize === PEAK_SIZE).Time;
+            const dgemmZVL128B_1_Time = data.find(d => d.Precision === 'DGEMM' && d.Target === 'ZVL128B' && d.LMUL === 1 && d.MatrixSize === PEAK_SIZE).Time;
+            const dgemmZVL128B_4_Time = data.find(d => d.Precision === 'DGEMM' && d.Target === 'ZVL128B' && d.LMUL === 4 && d.MatrixSize === PEAK_SIZE).Time;
+            const dgemmZVL256B_Time = data.find(d => d.Precision === 'DGEMM' && d.Target === 'ZVL256B' && d.LMUL === 1 && d.MatrixSize === PEAK_SIZE).Time;
+
+            const sgemmGenericTime = data.find(d => d.Precision === 'SGEMM' && d.Target === 'GENERIC' && d.MatrixSize === PEAK_SIZE).Time;
+            const sgemmZVL128B_1_Time = data.find(d => d.Precision === 'SGEMM' && d.Target === 'ZVL128B' && d.LMUL === 1 && d.MatrixSize === PEAK_SIZE).Time;
+            const sgemmZVL128B_2_Time = data.find(d => d.Precision === 'SGEMM' && d.Target === 'ZVL128B' && d.LMUL === 2 && d.MatrixSize === PEAK_SIZE).Time;
+            const sgemmZVL256B_1_Time = data.find(d => d.Precision === 'SGEMM' && d.Target === 'ZVL256B' && d.LMUL === 1 && d.MatrixSize === PEAK_SIZE).Time;
+            const sgemmZVL256B_2_Time = data.find(d => d.Precision === 'SGEMM' && d.Target === 'ZVL256B' && d.LMUL === 2 && d.MatrixSize === PEAK_SIZE).Time;
+            
+            const dgemmZVL128B_1_Speedup = dgemmGenericTime / dgemmZVL128B_1_Time;
+            const dgemmZVL128B_4_Speedup = dgemmGenericTime / dgemmZVL128B_4_Time;
+            const dgemmZVL256B_Speedup = dgemmGenericTime / dgemmZVL256B_Time;
+            
+            const sgemmZVL128B_1_Speedup = sgemmGenericTime / sgemmZVL128B_1_Time;
+            const sgemmZVL128B_2_Speedup = sgemmGenericTime / sgemmZVL128B_2_Time;
+            const sgemmZVL256B_1_Speedup = sgemmGenericTime / sgemmZVL256B_1_Time;
+            const sgemmZVL256B_2_Speedup = sgemmGenericTime / sgemmZVL256B_2_Time;
+
+
+            const analysis = [
+                // Section 1: Vectorization Gains
+                `<h3 class="text-lg font-bold mt-4 mb-2 border-b pb-1 text-blue-600">1. Vectorization Gains: ZVL128B and ZVL256B vs. GENERIC (MFLOPS at 4096)</h3>`,
+                
+                // DGEMM Comparison
+                `<h4 class="text-md font-semibold mt-4 mb-1 text-gray-700">A. Double Precision (DGEMM) Gains over GENERIC (${dgemmGeneric.toFixed(2)} MFLOPS)</h4>`,
+                `<ul class="list-disc ml-6 text-gray-700 space-y-2">`,
+                `<li><b>ZVL128B (LMUL=1):</b> Achieved <span class="flops-highlight">${dgemmZVL128B_1.toFixed(2)} MFLOPS</span>. This is a speedup of <b><span class="flops-ratio">${dgemmZVL128B_1_Speedup.toFixed(2)}x</span></b> compared to GENERIC.</li>`,
+                `<li><b>ZVL128B (LMUL=4):</b> Achieved <span class="flops-highlight">${dgemmZVL128B_4.toFixed(2)} MFLOPS</span>. This is a speedup of <b><span class="flops-ratio">${dgemmZVL128B_4_Speedup.toFixed(2)}x</span></b> compared to GENERIC, which is <b><span class="flops-ratio">${(dgemmZVL128B_4 / dgemmZVL128B_1).toFixed(2)}x</span></b> better than LMUL=1.</li>`,
+                `<li><b>ZVL256B (LMUL=1):</b> Achieved <span class="flops-highlight">${dgemmZVL256B.toFixed(2)} MFLOPS</span>. This represents the strongest speedup of <b><span class="flops-ratio">${dgemmZVL256B_Speedup.toFixed(2)}x</span></b> compared to GENERIC.</li>`,
+                `<li><b>ZVL256B vs ZVL128B (best):</b> The 256B vector length with LMUL=1 is <b><span class="flops-ratio">${(dgemmZVL256B / dgemmZVL128B_4).toFixed(2)}x</span></b> faster than the 128B vector length with LMUL=4 for DGEMM.</li>`,
+                `</ul>`,
+
+                // SGEMM Comparison
+                `<h4 class="text-md font-semibold mt-6 mb-1 text-gray-700">B. Single Precision (SGEMM) Gains over GENERIC (${sgemmGeneric.toFixed(2)} MFLOPS)</h4>`,
+                `<ul class="list-disc ml-6 text-gray-700 space-y-2">`,
+                `<li><b>ZVL128B (LMUL=1):</b> Achieved <span class="flops-highlight">${sgemmZVL128B_1.toFixed(2)} MFLOPS</span>. This represents a substantial speedup of <b><span class="flops-ratio">${sgemmZVL128B_1_Speedup.toFixed(2)}x</span></b> compared to GENERIC.</li>`,
+                `<li><b>ZVL128B (LMUL=2):</b> Achieved <span class="flops-highlight">${sgemmZVL128B_2.toFixed(2)} MFLOPS</span>. Speedup is <b><span class="flops-ratio">${sgemmZVL128B_2_Speedup.toFixed(2)}x</span></b>, slightly lower than LMUL=1.</li>`,
+                `<li><b>ZVL256B (LMUL=1):</b> Achieved <span class="flops-highlight">${sgemmZVL256B_1.toFixed(2)} MFLOPS</span>. This represents the peak speedup of <b><span class="flops-ratio">${sgemmZVL256B_1_Speedup.toFixed(2)}x</span></b> compared to GENERIC.</li>`,
+                `<li><b>ZVL256B (LMUL=2):</b> Achieved <span class="flops-highlight">${sgemmZVL256B_2.toFixed(2)} MFLOPS</span>. Speedup is <b><span class="flops-ratio">${sgemmZVL256B_2_Speedup.toFixed(2)}x</span></b>, slightly lower than LMUL=1.</li>`,
+                `<li><b>ZVL256B vs ZVL128B (best):</b> The 256B vector length with LMUL=1 is <b><span class="flops-ratio">${(sgemmZVL256B_1 / sgemmZVL128B_1).toFixed(2)}x</span></b> faster than the 128B vector length with LMUL=1 for SGEMM.</li>`,
+                `</ul>`,
+
+                // Section 2: LMUL Impact Analysis
+                `<h3 class="text-lg font-bold mt-6 mb-2 border-b pb-1 text-blue-600">2. LMUL (Vector Length Multiplier) Impact</h3>`,
+                `<ul class="list-disc ml-6 text-gray-700 space-y-2">`,
+                `<li><b>DGEMM ZVL128B:</b> LMUL=4 (<span class="flops-highlight">${dgemmZVL128B_4.toFixed(2)} MFLOPS</span>) is <b><span class="flops-ratio">${(dgemmZVL128B_4 / dgemmZVL128B_1).toFixed(2)}x</span></b> faster than LMUL=1 (<span class="flops-highlight">${dgemmZVL128B_1.toFixed(2)} MFLOPS</span>).</li>`,
+                `<li><b>SGEMM ZVL128B:</b> LMUL=1 (<span class="flops-highlight">${sgemmZVL128B_1.toFixed(2)} MFLOPS</span>) is slightly better than LMUL=2 (<span class="flops-highlight">${sgemmZVL128B_2.toFixed(2)} MFLOPS</span>) by <b><span class="flops-ratio">${(sgemmZVL128B_1 / sgemmZVL128B_2).toFixed(2)}x</span></b>.</li>`,
+                `<li><b>SGEMM ZVL256B:</b> LMUL=1 (<span class="flops-highlight">${sgemmZVL256B_1.toFixed(2)} MFLOPS</span>) is slightly better than LMUL=2 (<span class="flops-highlight">${sgemmZVL256B_2.toFixed(2)} MFLOPS</span>) by <b><span class="flops-ratio">${(sgemmZVL256B_1 / sgemmZVL256B_2).toFixed(2)}x</span></b>.</li>`,
+                `<li><b>Key Finding:</b> For DGEMM, higher LMUL improves performance on smaller vector lengths (ZVL128B). For SGEMM, LMUL=1 generally provides the best performance across all vector lengths at matrix size 4096.</li>`,
+                `</ul>`,
+            ];
+
+            return analysis.join('');
+        }
+
+        function renderData(data) {
+            const tableBody = document.querySelector('#raw-data-table tbody');
+            // Show all data, sorted by Precision, then Target, then LMUL, then MatrixSize
+            const allData = data.filter(d => d.Precision === 'DGEMM' || d.Precision === 'SGEMM')
+                .sort((a, b) => {
+                    // First sort by Precision (DGEMM first, then SGEMM)
+                    if (a.Precision !== b.Precision) {
+                        return a.Precision.localeCompare(b.Precision);
+                    }
+                    // Then by Target (GENERIC, ZVL128B, ZVL256B)
+                    if (a.Target !== b.Target) {
+                        return a.Target.localeCompare(b.Target);
+                    }
+                    // Then by LMUL (N/A first, then numeric)
+                    const aLMUL = a.LMUL === 'N/A' ? -1 : a.LMUL;
+                    const bLMUL = b.LMUL === 'N/A' ? -1 : b.LMUL;
+                    if (aLMUL !== bLMUL) {
+                        return aLMUL - bLMUL;
+                    }
+                    // Finally by MatrixSize
+                    return a.MatrixSize - b.MatrixSize;
+                });
+            tableBody.innerHTML = allData.map(d => `
+                <tr class="hover:bg-gray-50 transition duration-150 ease-in-out">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${d.Precision}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${d.Target}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${d.LMUL}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${d.MatrixSize}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">${d.Flops.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${d.Time.toFixed(4)}</td>
+                </tr>
+            `).join('');
+        }
+        
+        // New function to reliably start the application after Chart.js is loaded
+        function startApp() {
+            try {
+                const parsedData = parseCSV(csvData);
+                const analysisHtml = analyzeData(parsedData);
+                document.getElementById('analysis-output').innerHTML = analysisHtml;
+                renderData(parsedData);
+                
+                // --- MFLOPS Charts ---
+                const dgemmChartData = prepareChartData(parsedData, DGEMM_CONFIGS, false);
+                createChart('dgemm-chart', dgemmChartData, 'MFLOPS (Higher is better)', ' MFLOPS');
+
+                const sgemmChartData = prepareChartData(parsedData, SGEMM_CONFIGS, false);
+                createChart('sgemm-chart', sgemmChartData, 'MFLOPS (Higher is better)', ' MFLOPS');
+
+                // --- SPEEDUP Charts ---
+                const dgemmSpeedupChartData = prepareChartData(parsedData, DGEMM_SPEEDUP_CONFIGS, true);
+                createChart('dgemm-speedup-chart', dgemmSpeedupChartData, 'Speedup (GENERIC Time / Target Time)', 'x', 0.0, true);
+
+                const sgemmSpeedupChartData = prepareChartData(parsedData, SGEMM_SPEEDUP_CONFIGS, true);
+                createChart('sgemm-speedup-chart', sgemmSpeedupChartData, 'Speedup (GENERIC Time / Target Time)', 'x', 0.0, true);
+
+            } catch (error) {
+                console.error("Error during data processing:", error);
+                document.getElementById('analysis-output').innerHTML = `<p class="text-red-500">An error occurred while processing the data: ${error.message}</p>`;
+            }
+        }
+
+        // Observer to wait for Chart.js to be defined on the window
+        const chartObserver = new MutationObserver(function(mutations, observer) {
+            // Check if Chart.js is available
+            if (typeof window.Chart !== 'undefined') {
+                // Stop observing once Chart is found
+                observer.disconnect(); 
+                // Run the main application code
+                startApp();
+            }
+        });
+
+        // Start observing changes to the document body (e.g., script loads)
+        chartObserver.observe(document.head, { childList: true, subtree: true });
+        chartObserver.observe(document.body, { childList: true, subtree: true });
+        
+        // Also run on window load as a fallback, but the observer is more reliable.
+        window.onload = function() {
+            if (typeof window.Chart !== 'undefined') {
+                // Disconnect the observer if window.onload fires after Chart is loaded
+                chartObserver.disconnect(); 
+                startApp();
+            }
+        };
+        
+        // Immediate check in case the script loads instantly
+        if (typeof window.Chart !== 'undefined') {
+            startApp();
+        }
+
+    </script>
+</body>
+</html>
