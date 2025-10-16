@@ -17,8 +17,8 @@
 typedef struct {
     int matrix_size;
     int n_loop;
-    void (* bench_func)();
-    void (* blas_func)();
+    void (* bench_func)(void*, ...);
+    void (* blas_func)(void*, ...);
     void * (* create_matrix)(int size);
 } BenchParam;
 
