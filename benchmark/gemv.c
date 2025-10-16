@@ -129,7 +129,7 @@ int main(int argc, char *argv[]){
 #ifdef __linux
   srandom(getpid());
 #endif
-
+  printf("Size,Flops,Time\n");
   fprintf(stderr, "   SIZE       Flops\n");
 
   if (has_param_m == 0)
@@ -139,7 +139,6 @@ int main(int argc, char *argv[]){
   	{
    		timeg=0;
    		if ( has_param_n == 0 ) n = m;
-   		fprintf(stderr, " %6dx%d : ", (int)m,(int)n);
    		for(j = 0; j < m; j++){
       			for(i = 0; i < n * COMPSIZE; i++){
 				a[(long)i + (long)j * (long)m * COMPSIZE] = ((IFLOAT) rand() / (FLOAT) RAND_MAX) - 0.5;
@@ -164,9 +163,11 @@ int main(int argc, char *argv[]){
 
     		}
 
+			double flops = COMPSIZE * COMPSIZE * 2. * (double)m * (double)n / timeg * 1.e-6;
+		    printf("%d,%f,%f\n", m, flops, timeg);
     		timeg /= loops;
-
-    		fprintf(stderr, " %10.2f MFlops %10.6f sec\n", COMPSIZE * COMPSIZE * 2. * (double)m * (double)n / timeg * 1.e-6, timeg);
+		
+    		fprintf(stderr, " %6dx%d : %10.2f MFlops %10.6f sec\n", (int)m, (int)n, flops, timeg);
 
   	}
   }
@@ -176,7 +177,6 @@ int main(int argc, char *argv[]){
   	for(n = from; n <= to; n += step)
   	{
    		timeg=0;
-   		fprintf(stderr, " %6dx%d : ", (int)m,(int)n);
    		for(j = 0; j < m; j++){
       			for(i = 0; i < n * COMPSIZE; i++){
 				a[(long)i + (long)j * (long)m * COMPSIZE] = ((FLOAT) rand() / (FLOAT) RAND_MAX) - 0.5;
@@ -201,9 +201,11 @@ int main(int argc, char *argv[]){
 
     		}
 
+			double flops = COMPSIZE * COMPSIZE * 2. * (double)m * (double)n / timeg * 1.e-6;
+		    printf("%d,%f,%f\n", m, flops, timeg);
     		timeg /= loops;
 
-    		fprintf(stderr, " %10.2f MFlops %10.6f sec\n", COMPSIZE * COMPSIZE * 2. * (double)m * (double)n / timeg * 1.e-6, timeg);
+    		fprintf(stderr, " %6dx%d : %10.2f MFlops %10.6f sec\n", (int)m, (int)n, flops, timeg);
 
   	}
   }
