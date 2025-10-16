@@ -161,7 +161,7 @@ int main(int argc, char *argv[]){
   printf("Size,Flops,Time\n");
   fprintf(stderr, "          SIZE                   Flops             Time\n");
 
-  for (i = from; i <= to; i += step) {
+  for (i = from; i <= to; i *= step) {
     
     timeg=0;
 
