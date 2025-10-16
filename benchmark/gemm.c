@@ -157,7 +157,8 @@ int main(int argc, char *argv[]){
   for (i = 0; i < m * n * COMPSIZE; i++) {
     c[i] = ((FLOAT) rand() / (FLOAT) RAND_MAX) - 0.5;
   }
-
+	
+  printf("Size,Flops,Time\n");
   fprintf(stderr, "          SIZE                   Flops             Time\n");
 
   for (i = from; i <= to; i += step) {
@@ -185,10 +186,12 @@ int main(int argc, char *argv[]){
     time1 = getsec();
 
     timeg = time1/loops;
+	double flops = COMPSIZE * COMPSIZE * 2. * (double)k * (double)m * (double)n / timeg * 1.e-6;
     fprintf(stderr,
 	    " %10.2f MFlops %10.6f sec\n",
-	    COMPSIZE * COMPSIZE * 2. * (double)k * (double)m * (double)n / timeg * 1.e-6, time1);
-    
+	    flops, time1);
+    // Print plotting data (Size,TotalTime) to stdout
+    printf("%d,%f,%f\n", i, flops, time1);
   }
 
   return 0;
