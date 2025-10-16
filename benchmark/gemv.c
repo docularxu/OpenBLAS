@@ -135,7 +135,7 @@ int main(int argc, char *argv[]){
   if (has_param_m == 0)
   {
 
-  	for(m = from; m <= to; m += step)
+  	for(m = from; m <= to; m *= step)
   	{
    		timeg=0;
    		if ( has_param_n == 0 ) n = m;
@@ -174,7 +174,7 @@ int main(int argc, char *argv[]){
   else
   {
 
-  	for(n = from; n <= to; n += step)
+  	for(n = from; n <= to; n *= step)
   	{
    		timeg=0;
    		for(j = 0; j < m; j++){
