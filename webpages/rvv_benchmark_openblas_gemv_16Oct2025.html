@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RISC-V GEMV Performance Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .header-section {
+            background-color: #3b82f6;
+            color: white;
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+        }
+        .flops-highlight {
+            color: #10b981;
+            font-weight: 700;
+        }
+        .flops-ratio {
+            color: #f59e0b;
+            font-weight: 700;
+        }
+        th {
+            background-color: #e5e7eb;
+        }
+        .chart-visual {
+            min-height: 450px;
+        }
+        .authors-container {
+            margin: 20px auto 40px auto;
+            max-width: 1100px;
+            background-color: #f1f8ff;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .authors-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+        .author-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .author-logo {
+            margin-bottom: 15px;
+        }
+        .author-logo img {
+            max-height: 90px;
+            display: block;
+        }
+        .author-info {
+            color: #2c3e50;
+            font-size: 0.9em;
+            line-height: 1.7;
+        }
+        .author-info strong {
+            font-size: 1.1em;
+            color: #1e3a5f;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .author-links {
+            margin-top: 10px;
+            font-size: 0.85em;
+            line-height: 1.8;
+        }
+        .author-links a {
+            color: #1e88e5;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        .author-links a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 900px) {
+            .authors-grid {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+        .environment {
+            margin: 40px 0;
+            background-color: #fcfcfc;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+        .env-grid {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 20px;
+            overflow-x: auto;
+        }
+        .env-card {
+            background-color: #ffffff;
+            border-left: 5px solid #4CAF50;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .env-card.software {
+            flex: 0 0 40%;
+            max-width: 40%;
+            min-width: 40%;
+        }
+        .env-card.hardware {
+            flex: 0 0 60%;
+            max-width: 60%;
+            min-width: 60%;
+        }
+        .env-card h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: #2c3e50;
+            font-size: 1.4em;
+        }
+        .env-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #1b5e20;
+            margin-bottom: 8px;
+        }
+        .env-logos {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .env-logo {
+            max-height: 88px;
+            border-radius: 8px;
+            background-color: #f5f5f5;
+            padding: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+        .env-logo img {
+            display: block;
+            max-height: 76px;
+            max-width: 140px;
+        }
+        .env-card p {
+            margin: 6px 0;
+            color: #555;
+        }
+        .isa-profile {
+            word-break: break-word;
+            line-height: 1.5;
+        }
+        .env-card a {
+            color: #1e88e5;
+            text-decoration: none;
+        }
+        .env-card a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 900px) {
+            .env-grid {
+                flex-wrap: wrap;
+            }
+            .env-card.software,
+            .env-card.hardware {
+                flex: 0 0 100%;
+                max-width: 100%;
+                min-width: 100%;
+            }
+        }
+        .detail-section {
+            margin: 40px 0;
+            background-color: #fcfcfc;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+        .detail-section h3 {
+            margin-top: 0;
+            color: #34495e;
+            font-size: 1.6em;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+        .detail-section p {
+            color: #555;
+            margin: 10px 0;
+        }
+        .detail-section a {
+            color: #1e88e5;
+            text-decoration: none;
+        }
+        .detail-section a:hover {
+            text-decoration: underline;
+        }
+        .detail-section code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d73a49;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="app" class="max-w-6xl mx-auto">
+        <div class="card mb-8">
+            <div class="header-section p-6">
+                <h1 class="text-2xl font-bold">RISC-V GEMV Performance Summary</h1>
+                <p class="mt-1 text-sm">Comparison of DGEMV (Double) and SGEMV (Single) across Vector Targets (Based on peak MFLOPS at Vector Size 4096)</p>
+                <p class="mt-2 text-xs opacity-80">Copyright 2025</p>
+            </div>
+
+            <section class="authors-container">
+                <div class="authors-grid">
+                    <div class="author-item">
+                        <div class="author-logo">
+                            <img src="RISCstar_Logo.png" alt="RISCstar Solutions Logo">
+                        </div>
+                        <div class="author-info">
+                            <strong>GUODONG XU</strong>
+                            RISCstar Solutions
+                            <div class="author-links">
+                                EMAIL: <a href="mailto:guodong@riscstar.com">guodong@riscstar.com</a><br>
+                                LINKEDIN: <a href="https://www.linkedin.com/in/docularxu/" target="_blank" rel="noopener">https://www.linkedin.com/in/docularxu/</a><br>
+                                GITHUB: <a href="https://www.github.org/docularxu" target="_blank" rel="noopener">https://www.github.org/docularxu</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="author-item">
+                        <div class="author-logo">
+                            <img src="fvf-logo.webp" alt="Fedora-V Force Team Logo">
+                        </div>
+                        <div class="author-info">
+                            <strong>HAIBIN LIU</strong>
+                            Southeast University
+                            <div class="author-links">
+                                EMAIL: <a href="mailto:haibin.liu@seu.edu.cn">haibin.liu@seu.edu.cn</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="detail-section" style="margin: 20px 30px; padding: 20px;">
+                <h3 style="font-size: 1.3em; margin-top: 0;">OpenBLAS Version Under Test</h3>
+                <p>Benchmarks were captured from <strong><a href="https://github.com/OpenMathLib/OpenBLAS/releases/tag/v0.3.30" target="_blank" rel="noopener">OpenBLAS 0.3.30</a></strong> (official release), which was released on June 19, 2025.</p>
+                <p>Tag commit hash: <code>993fad6aebbce34a97d3f8c34d6d79d35b64cc48</code></p>
+                <p>Commit link: <a href="https://github.com/OpenMathLib/OpenBLAS/commit/993fad6aebbce34a97d3f8c34d6d79d35b64cc48" target="_blank" rel="noopener">https://github.com/OpenMathLib/OpenBLAS/commit/993fad6aebbce34a97d3f8c34d6d79d35b64cc48</a></p>
+            </section>
+
+            <section style="margin: 20px 30px; padding: 20px; background-color: #fcfcfc; border-radius: 10px;">
+                <h3 style="font-size: 1.3em; margin-top: 0; color: #2c3e50;">Benchmark Environment</h3>
+                <div class="env-grid">
+                    <div class="env-card software">
+                        <div class="env-title">Software Platform</div>
+                        <div class="env-logos">
+                            <div class="env-logo">
+                                <img src="fedora_remix_logo.png" alt="Fedora Remix Logo">
+                            </div>
+                            <div class="env-logo">
+                                <img src="fvf-logo.webp" alt="Fedora-V Force Team Logo">
+                            </div>
+                        </div>
+                        <h3>Fedora 42 Remix</h3>
+                        <p>Released by the Fedora-V Force team.</p>
+                        <p>Download link:
+                            <a href="https://images.fedoravforce.org" target="_blank" rel="noopener">images.fedoravforce.org</a>
+                        </p>
+                    </div>
+                    <div class="env-card hardware">
+                        <div class="env-title">Hardware Platform</div>
+                        <div class="env-logos">
+                            <div class="env-logo">
+                                <img src="K1_SoC-scaled.jpg" alt="K1 SoC Logo">
+                            </div>
+                        </div>
+                        <h3>K1 SoC (RISC-V)</h3>
+                        <p>Manufactured by SpacemiT.</p>
+                        <p>CPU: 8 cores, model <strong>Spacemit® X60</strong>.</p>
+                        <p class="isa-profile">ISA Profile:<br>
+                            rv64imafdcv_zicbom_zicboz_zicntr_zicond_zicsr_zifencei_zihintpause_zihpm<br>
+                            zfh_zfhmin_zca_zcd_zba_zbb_zbc_zbs_zkt_zve32f_zve32x<br>
+                            zve64d_zve64f_zve64x_zvfh_zvfhmin_zvkt_sscofpmf_sstc<br>
+                            svinval_svnapot_svpbmt
+                        </p>
+                        <p>MMU Mode: sv39.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="detail-section" style="margin: 20px 30px; padding: 25px;">
+                <h3 style="font-size: 1.4em; margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">Performance Analysis Summary</h3>
+                
+                <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #3b82f6;">
+                    <h4 style="margin-top: 0; color: #1e3a5f; font-size: 1.1em;">About GEMV (General Matrix-Vector Multiply)</h4>
+                    <p style="color: #555; line-height: 1.7;">
+                        GEMV performs matrix-vector multiplication: <strong>y = α·A·x + β·y</strong>, where A is a matrix and x, y are vectors. 
+                        Unlike GEMM (matrix-matrix), GEMV is <strong>memory-bandwidth bound</strong> rather than compute-bound, making it more challenging to optimize.
+                        Each element of A is typically accessed only once, limiting opportunities for data reuse in cache.
+                    </p>
+                </div>
+
+                <h3 style="font-size: 1.3em; margin-top: 25px; margin-bottom: 15px; color: #1e3a5f;">Key Findings</h3>
+
+                <div id="key-findings-container">
+                    <div style="margin-bottom: 25px;">
+                        <h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>1. GEMV Shows Limited and Inconsistent Vector Benefits</strong></h4>
+                        <p style="color: #555; line-height: 1.8; margin-bottom: 10px;">Unlike GEMM, GEMV optimization shows highly variable results across different vector sizes and precisions:</p>
+                        <ul style="color: #555; line-height: 1.8; margin-left: 20px;">
+                            <li><strong>DGEMV:</strong> Only vector size <strong style="color: #059669;">1024 shows modest gains</strong> (~18% over GENERIC). Most other sizes show <strong style="color: #dc2626;">degraded performance</strong> or minimal improvement</li>
+                            <li><strong>SGEMV:</strong> Shows <strong style="color: #059669;">strong positive results for sizes 256-2048</strong> (1.4x to 5.3x over GENERIC), but experiences <strong style="color: #dc2626;">significant performance degradation at size 4096</strong> (~0.37x of GENERIC performance)</li>
+                            <li><strong>Root cause:</strong> GEMV is memory-bandwidth bound with minimal data reuse. Vector optimizations help with smaller working sets that fit in cache, but large vectors (4096) likely exceed cache capacity and suffer from memory bottlenecks</li>
+                        </ul>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>2. SGEMV: Size-Dependent Performance Profile</strong></h4>
+                        <ul style="color: #555; line-height: 1.8; margin-left: 20px;">
+                            <li><strong>Small to medium vectors (256-2048):</strong> Excellent vectorization gains
+                                <ul style="margin-left: 20px; margin-top: 5px;">
+                                    <li>Size 256: Up to <strong style="color: #059669;">5.3x speedup</strong> (ZVL256B LMUL=2: 23.2 vs 4.4 MFLOPS)</li>
+                                    <li>Size 512-2048: Consistent <strong style="color: #059669;">1.4x to 3.3x gains</strong></li>
+                                </ul>
+                            </li>
+                            <li><strong>Large vectors (4096):</strong> <strong style="color: #dc2626;">Performance collapse</strong>
+                                <ul style="margin-left: 20px; margin-top: 5px;">
+                                    <li>RVV kernels: 9.5-12.0 MFLOPS vs GENERIC: <strong style="color: #dc2626;">26.4 MFLOPS</strong></li>
+                                    <li>Indicates cache thrashing or memory bandwidth saturation</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>3. DGEMV: Minimal Vector Benefit</strong></h4>
+                        <ul style="color: #555; line-height: 1.8; margin-left: 20px;">
+                            <li>Best case: Size 1024 shows ~<strong style="color: #d97706;">18% improvement</strong> (6.2 vs 5.3 MFLOPS)</li>
+                            <li>Most sizes: <strong style="color: #dc2626;">Performance degradation or no benefit</strong></li>
+                            <li>Double-precision memory bandwidth requirements overwhelm vectorization advantages</li>
+                            <li><strong>Observation:</strong> DGEMV vectorization on current RVV implementations provides limited practical benefit</li>
+                        </ul>
+                    </div>
+
+                    <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-top: 20px;">
+                        <h4 style="margin-top: 0; color: #92400e; font-size: 1em;"><strong>💡 GEMV Optimization Recommendation:</strong></h4>
+                        <ul style="color: #78350f; line-height: 1.7; margin-left: 20px; font-size: 0.95em;">
+                            <li><strong>SGEMV:</strong> Use RVV kernels for <strong style="color: #059669;">vectors ≤ 2048</strong>, fall back to GENERIC for size 4096+</li>
+                            <li><strong>DGEMV:</strong> RVV optimization shows <strong style="color: #d97706;">marginal benefit</strong>; consider GENERIC for most workloads</li>
+                            <li><strong>LMUL impact:</strong> Minimal differentiation between LMUL settings in GEMV, unlike GEMM where it's significant</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <div id="analysis-output" class="p-6">
+                <p class="text-gray-600">Loading and analyzing data...</p>
+            </div>
+        </div>
+
+        </div>
+
+        <div id="chart-mflops-container" class="card p-6 mb-8 chart-visual">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Raw Performance (MFLOPS vs. Vector Size)</h2>
+            
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">DGEMV (Double Precision) - MFLOPS</h3>
+                    <canvas id="dgemv-chart"></canvas>
+                </div>
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">SGEMV (Single Precision) - MFLOPS</h3>
+                    <canvas id="sgemv-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="chart-speedup-container" class="card p-6 mb-8 chart-visual">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Speedup Analysis (vs. GENERIC Time)</h2>
+            
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">DGEMV (Double Precision) - Speedup (GENERIC = 1.0x)</h3>
+                    <canvas id="dgemv-speedup-chart"></canvas>
+                </div>
+                <div class="w-full lg:w-1/2 h-96">
+                    <h3 class="text-center font-medium mb-2 text-gray-700">SGEMV (Single Precision) - Speedup (GENERIC = 1.0x)</h3>
+                    <canvas id="sgemv-speedup-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Raw Data (Vector Size 256 - 4096)</h2>
+            <div class="overflow-x-auto">
+                <table id="raw-data-table" class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">Precision</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LMUL</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Vector Size</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Flops (MFLOPS)</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">Time (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+
+    <script>
+        const csvData = `OPENBLAS_DGEMV_RISCV64_GENERIC_100_256-4096,,
+Size,Flops,Time
+256,3.74201,0.035027
+512,3.675519,0.142643
+1024,5.256478,0.398965
+2048,15.205786,0.551672
+4096,16.221575,2.068506
+,,
+OPENBLAS_DGEMV_RISCV64_ZVL128B_d1_100_256-4096,,
+Size,Flops,Time
+256,4.474233,0.029295
+512,1.619159,0.323803
+1024,6.187859,0.338914
+2048,5.862708,1.430842
+4096,5.551567,6.044137
+,,
+OPENBLAS_DGEMV_RISCV64_ZVL128B_d4_100_256-4096,,
+Size,Flops,Time
+256,6.442074,0.020346
+512,1.282545,0.408787
+1024,6.252622,0.335404
+2048,5.893252,1.423426
+4096,5.490911,6.110904
+,,
+OPENBLAS_DGEMV_RISCV64_ZVL256B_d1_100_256-4096,,
+Size,Flops,Time
+256,2.821406,0.046456
+512,1.055234,0.496845
+1024,6.220223,0.337151
+2048,6.271858,1.3375
+4096,5.984648,5.606751
+,,
+OPENBLAS_DGEMV_RISCV64_ZVL256B_d2_100_256-4096,,
+Size,Flops,Time
+256,3.878643,0.033793
+512,1.041639,0.50333
+1024,6.068714,0.345568
+2048,6.17852,1.357705
+4096,5.88591,5.700807
+,,
+,,
+OPENBLAS_SGEMV_RISCV64_GENERIC_100_256-4096,,
+Size,Flops,Time
+256,4.410918,0.029715
+512,4.339874,0.120807
+1024,8.893018,0.23582
+2048,8.726017,0.961333
+4096,26.350458,1.273391
+,,
+OPENBLAS_SGEMV_RISCV64_ZVL128B_f1_100_256-4096,,
+Size,Flops,Time
+256,18.604215,0.007045
+512,8.685142,0.060366
+1024,14.917635,0.140582
+2048,12.47744,0.672302
+4096,12.029995,2.789231
+,,
+OPENBLAS_SGEMV_RISCV64_ZVL128B_f2_100_256-4096,,
+Size,Flops,Time
+256,19.34143,0.006777
+512,8.83237,0.05936
+1024,15.069796,0.139163
+2048,11.995216,0.699329
+4096,11.914207,2.816338
+,,
+OPENBLAS_SGEMV_RISCV64_ZVL256B_f1_100_256-4096,,
+Size,Flops,Time
+256,16.492303,0.007947
+512,14.47098,0.03623
+1024,14.775368,0.141936
+2048,16.466567,0.509433
+4096,9.691858,3.462126
+,,
+OPENBLAS_SGEMV_RISCV64_ZVL256B_f2_100_256-4096,,
+Size,Flops,Time
+256,23.20127,0.005649
+512,14.397002,0.036416
+1024,15.680646,0.133741
+2048,15.981106,0.524908
+4096,9.503682,3.530677`;
+
+        const PEAK_SIZE = 4096;
+
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n');
+            const data = [];
+            let currentPrecision = null;
+            let currentTarget = null;
+            let currentLMUL = null;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line === '' || line === ',,') continue;
+                
+                // Check if this is a header line
+                if (line.startsWith('OPENBLAS_')) {
+                    const parts = line.split('_');
+                    if (parts[1] === 'DGEMV') {
+                        currentPrecision = 'DGEMV';
+                    } else if (parts[1] === 'SGEMV') {
+                        currentPrecision = 'SGEMV';
+                    }
+                    
+                    if (parts[3] === 'GENERIC') {
+                        currentTarget = 'GENERIC';
+                        currentLMUL = 'N/A';
+                    } else if (parts[3].startsWith('ZVL')) {
+                        currentTarget = parts[3];
+                        // Extract LMUL from next part (d1, d4, f1, f2)
+                        const lmulPart = parts[4];
+                        if (lmulPart) {
+                            currentLMUL = parseInt(lmulPart.substring(1));
+                        }
+                    }
+                    continue;
+                }
+                
+                // Skip column header line
+                if (line.startsWith('Size,')) continue;
+                
+                // Parse data line
+                const values = line.split(',').map(v => v.trim());
+                if (values.length >= 3 && values[0] !== '') {
+                    data.push({
+                        Precision: currentPrecision,
+                        Target: currentTarget,
+                        LMUL: currentLMUL,
+                        VectorSize: parseInt(values[0]),
+                        Flops: parseFloat(values[1]),
+                        Time: parseFloat(values[2])
+                    });
+                }
+            }
+            
+            return data.filter(d => !isNaN(d.VectorSize) && !isNaN(d.Flops));
+        }
+
+        const DGEMV_CONFIGS = [
+            { key: 'DGEMV-GENERIC-N/A', label: 'GENERIC', color: '#60A5FA' },
+            { key: 'DGEMV-ZVL128B-4', label: 'ZVL128B (LMUL=4)', color: '#3B82F6' },
+            { key: 'DGEMV-ZVL256B-1', label: 'ZVL256B (LMUL=1)', color: '#1D4ED8' },
+        ];
+
+        const SGEMV_CONFIGS = [
+            { key: 'SGEMV-GENERIC-N/A', label: 'GENERIC', color: '#6EE7B7' },
+            { key: 'SGEMV-ZVL128B-1', label: 'ZVL128B (LMUL=1)', color: '#10B981' },
+            { key: 'SGEMV-ZVL256B-2', label: 'ZVL256B (LMUL=2)', color: '#059669' },
+        ];
+
+        const DGEMV_SPEEDUP_CONFIGS = [
+            { key: 'DGEMV-GENERIC-N/A', label: 'GENERIC (1.0x Baseline)', color: '#60A5FA' },
+            { key: 'DGEMV-ZVL128B-1', label: 'ZVL128B (LMUL=1)', color: '#10B981' },
+            { key: 'DGEMV-ZVL128B-4', label: 'ZVL128B (LMUL=4)', color: '#059669' },
+            { key: 'DGEMV-ZVL256B-1', label: 'ZVL256B (LMUL=1)', color: '#FCD34D' },
+            { key: 'DGEMV-ZVL256B-2', label: 'ZVL256B (LMUL=2)', color: '#F59E0B' },
+        ];
+
+        const SGEMV_SPEEDUP_CONFIGS = [
+            { key: 'SGEMV-GENERIC-N/A', label: 'GENERIC (1.0x Baseline)', color: '#6EE7B7' },
+            { key: 'SGEMV-ZVL128B-1', label: 'ZVL128B (LMUL=1)', color: '#EF4444' },
+            { key: 'SGEMV-ZVL128B-2', label: 'ZVL128B (LMUL=2)', color: '#B91C1C' },
+            { key: 'SGEMV-ZVL256B-1', label: 'ZVL256B (LMUL=1)', color: '#8B5CF6' },
+            { key: 'SGEMV-ZVL256B-2', label: 'ZVL256B (LMUL=2)', color: '#7C3AED' },
+        ];
+
+        function prepareChartData(data, configurations, isSpeedup) {
+            const vectorSizes = [...new Set(data.map(d => d.VectorSize))].sort((a, b) => a - b);
+            
+            const datasets = configurations.map(config => {
+                const parts = config.key.split('-');
+                const precision = parts[0];
+                const target = parts[1];
+                const lmul = parts[2];
+                
+                const dataPoints = vectorSizes.map(size => {
+                    const configRow = data.find(d => 
+                        d.Precision === precision && 
+                        d.Target === target && 
+                        (lmul === 'N/A' ? d.LMUL === 'N/A' : d.LMUL === parseFloat(lmul)) && 
+                        d.VectorSize === size
+                    );
+
+                    if (!configRow) return 0;
+
+                    if (isSpeedup) {
+                        const genericRow = data.find(d => 
+                            d.Precision === precision && 
+                            d.Target === 'GENERIC' && 
+                            d.VectorSize === size
+                        );
+
+                        if (configRow.Target === 'GENERIC') return 1.0;
+                        
+                        if (genericRow && genericRow.Time > 0 && configRow.Time > 0) {
+                            return genericRow.Time / configRow.Time;
+                        }
+                        return 0;
+                    } else {
+                        return configRow.Flops;
+                    }
+                });
+
+                return {
+                    label: config.label,
+                    data: dataPoints,
+                    backgroundColor: config.color,
+                    borderColor: config.color,
+                    borderWidth: 1,
+                };
+            });
+
+            return {
+                labels: vectorSizes.map(size => `Size ${size}`),
+                datasets: datasets,
+            };
+        }
+
+        const chartInstances = {};
+
+        function createChart(canvasId, chartData, yAxisTitle, tooltipSuffix, yMin = 0, isSpeedupChart = false) {
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js library is not loaded.');
+                return;
+            }
+
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+
+            const baselinePlugin = {
+                id: 'baselineLine',
+                beforeDraw: (chart) => {
+                    if (isSpeedupChart && chart.options.scales.y.min === 0) {
+                        const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
+                        
+                        if (y.max >= 1.0 && y.min <= 1.0) {
+                            const yCoord = y.getPixelForValue(1.0);
+                            
+                            ctx.save();
+                            ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+                            ctx.lineWidth = 2;
+                            ctx.setLineDash([5, 5]);
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(left, yCoord);
+                            ctx.lineTo(right, yCoord);
+                            ctx.stroke();
+                            
+                            ctx.fillStyle = 'rgba(239, 68, 68, 1)';
+                            ctx.font = 'bold 10px Inter';
+                            ctx.textAlign = 'left';
+                            ctx.fillText('1.0x Baseline', left + 5, yCoord - 5);
+
+                            ctx.restore();
+                        }
+                    }
+                }
+            };
+            
+            const plugins = isSpeedupChart ? [baselinePlugin] : [];
+
+            const newChart = new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        title: {
+                            display: false,
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += context.parsed.y.toFixed(2) + tooltipSuffix;
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Vector Size (N)',
+                                font: { size: 12 }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: yAxisTitle,
+                                font: { size: 12 }
+                            },
+                            beginAtZero: true,
+                            min: yMin 
+                        }
+                    }
+                },
+                plugins: plugins
+            });
+            
+            chartInstances[canvasId] = newChart;
+        }
+
+        function analyzeData(data) {
+            const peakData = data.filter(d => d.VectorSize === PEAK_SIZE);
+            const peakFlops = {};
+
+            peakData.forEach(d => {
+                const lmulKey = d.LMUL === 'N/A' ? 'N/A' : d.LMUL.toString();
+                const key = `${d.Precision}-${d.Target}-${lmulKey}`;
+                peakFlops[key] = parseFloat(d.Flops);
+            });
+            
+            const dgemvGeneric = peakFlops['DGEMV-GENERIC-N/A'];
+            const dgemvZVL128B_1 = peakFlops['DGEMV-ZVL128B-1']; 
+            const dgemvZVL128B_4 = peakFlops['DGEMV-ZVL128B-4']; 
+            const dgemvZVL256B_1 = peakFlops['DGEMV-ZVL256B-1']; 
+            const dgemvZVL256B_2 = peakFlops['DGEMV-ZVL256B-2'];
+            
+            const sgemvGeneric = peakFlops['SGEMV-GENERIC-N/A'];
+            const sgemvZVL128B_1 = peakFlops['SGEMV-ZVL128B-1']; 
+            const sgemvZVL128B_2 = peakFlops['SGEMV-ZVL128B-2']; 
+            const sgemvZVL256B_1 = peakFlops['SGEMV-ZVL256B-1'];
+            const sgemvZVL256B_2 = peakFlops['SGEMV-ZVL256B-2'];
+            
+            const dgemvGenericTime = data.find(d => d.Precision === 'DGEMV' && d.Target === 'GENERIC' && d.VectorSize === PEAK_SIZE).Time;
+            const dgemvZVL128B_1_Time = data.find(d => d.Precision === 'DGEMV' && d.Target === 'ZVL128B' && d.LMUL === 1 && d.VectorSize === PEAK_SIZE).Time;
+            const dgemvZVL128B_4_Time = data.find(d => d.Precision === 'DGEMV' && d.Target === 'ZVL128B' && d.LMUL === 4 && d.VectorSize === PEAK_SIZE).Time;
+            const dgemvZVL256B_1_Time = data.find(d => d.Precision === 'DGEMV' && d.Target === 'ZVL256B' && d.LMUL === 1 && d.VectorSize === PEAK_SIZE).Time;
+            const dgemvZVL256B_2_Time = data.find(d => d.Precision === 'DGEMV' && d.Target === 'ZVL256B' && d.LMUL === 2 && d.VectorSize === PEAK_SIZE).Time;
+
+            const sgemvGenericTime = data.find(d => d.Precision === 'SGEMV' && d.Target === 'GENERIC' && d.VectorSize === PEAK_SIZE).Time;
+            const sgemvZVL128B_1_Time = data.find(d => d.Precision === 'SGEMV' && d.Target === 'ZVL128B' && d.LMUL === 1 && d.VectorSize === PEAK_SIZE).Time;
+            const sgemvZVL128B_2_Time = data.find(d => d.Precision === 'SGEMV' && d.Target === 'ZVL128B' && d.LMUL === 2 && d.VectorSize === PEAK_SIZE).Time;
+            const sgemvZVL256B_1_Time = data.find(d => d.Precision === 'SGEMV' && d.Target === 'ZVL256B' && d.LMUL === 1 && d.VectorSize === PEAK_SIZE).Time;
+            const sgemvZVL256B_2_Time = data.find(d => d.Precision === 'SGEMV' && d.Target === 'ZVL256B' && d.LMUL === 2 && d.VectorSize === PEAK_SIZE).Time;
+            
+            const dgemvZVL128B_1_Speedup = dgemvGenericTime / dgemvZVL128B_1_Time;
+            const dgemvZVL128B_4_Speedup = dgemvGenericTime / dgemvZVL128B_4_Time;
+            const dgemvZVL256B_1_Speedup = dgemvGenericTime / dgemvZVL256B_1_Time;
+            const dgemvZVL256B_2_Speedup = dgemvGenericTime / dgemvZVL256B_2_Time;
+            
+            const sgemvZVL128B_1_Speedup = sgemvGenericTime / sgemvZVL128B_1_Time;
+            const sgemvZVL128B_2_Speedup = sgemvGenericTime / sgemvZVL128B_2_Time;
+            const sgemvZVL256B_1_Speedup = sgemvGenericTime / sgemvZVL256B_1_Time;
+            const sgemvZVL256B_2_Speedup = sgemvGenericTime / sgemvZVL256B_2_Time;
+
+            // Calculate best performance at size 1024 for DGEMV
+            const dgemv1024Data = data.filter(d => d.Precision === 'DGEMV' && d.VectorSize === 1024);
+            const dgemvGeneric1024 = dgemv1024Data.find(d => d.Target === 'GENERIC').Flops;
+            const dgemvBest1024 = Math.max(...dgemv1024Data.filter(d => d.Target !== 'GENERIC').map(d => d.Flops));
+            const dgemv1024Improvement = ((dgemvBest1024 - dgemvGeneric1024) / dgemvGeneric1024 * 100);
+
+            // Calculate SGEMV performance across different sizes for best RVV configs
+            const sgemv256Best = Math.max(...data.filter(d => d.Precision === 'SGEMV' && d.VectorSize === 256 && d.Target !== 'GENERIC').map(d => d.Flops));
+            const sgemv256Generic = data.find(d => d.Precision === 'SGEMV' && d.VectorSize === 256 && d.Target === 'GENERIC').Flops;
+            const sgemv256Speedup = sgemv256Best / sgemv256Generic;
+
+            const keyFindings = [
+                `<div style="margin-bottom: 25px;">`,
+                `<h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>1. GEMV Shows Limited and Inconsistent Vector Benefits</strong></h4>`,
+                `<p style="color: #555; line-height: 1.8; margin-bottom: 10px;">Unlike GEMM, GEMV optimization shows highly variable results across different vector sizes and precisions:</p>`,
+                `<ul style="color: #555; line-height: 1.8; margin-left: 20px;">`,
+                `<li><strong>DGEMV:</strong> Only vector size <strong style="color: #059669;">1024 shows modest gains</strong> (~${dgemv1024Improvement.toFixed(0)}% over GENERIC). Most other sizes show <strong style="color: #dc2626;">degraded performance</strong> or minimal improvement</li>`,
+                `<li><strong>SGEMV:</strong> Shows <strong style="color: #059669;">strong positive results for sizes 256-2048</strong> (1.4x to ${sgemv256Speedup.toFixed(1)}x over GENERIC), but experiences <strong style="color: #dc2626;">significant performance degradation at size 4096</strong> (~${(sgemvZVL256B_2 / sgemvGeneric).toFixed(2)}x of GENERIC performance)</li>`,
+                `<li><strong>Root cause:</strong> GEMV is memory-bandwidth bound with minimal data reuse. Vector optimizations help with smaller working sets that fit in cache, but large vectors (4096) likely exceed cache capacity and suffer from memory bottlenecks</li>`,
+                `</ul>`,
+                `</div>`,
+
+                `<div style="margin-bottom: 25px;">`,
+                `<h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>2. SGEMV: Size-Dependent Performance Profile</strong></h4>`,
+                `<ul style="color: #555; line-height: 1.8; margin-left: 20px;">`,
+                `<li><strong>Small to medium vectors (256-2048):</strong> Excellent vectorization gains`,
+                `<ul style="margin-left: 20px; margin-top: 5px;">`,
+                `<li>Size 256: Up to <strong style="color: #059669;">${sgemv256Speedup.toFixed(1)}x speedup</strong> (ZVL256B LMUL=2: ${sgemv256Best.toFixed(1)} vs ${sgemv256Generic.toFixed(1)} MFLOPS)</li>`,
+                `<li>Size 512-2048: Consistent <strong style="color: #059669;">1.4x to 3.3x gains</strong></li>`,
+                `</ul>`,
+                `</li>`,
+                `<li><strong>Large vectors (4096):</strong> <strong style="color: #dc2626;">Performance collapse</strong>`,
+                `<ul style="margin-left: 20px; margin-top: 5px;">`,
+                `<li>RVV kernels: 9.5-12.0 MFLOPS vs GENERIC: <strong style="color: #dc2626;">${sgemvGeneric.toFixed(1)} MFLOPS</strong></li>`,
+                `<li>Indicates cache thrashing or memory bandwidth saturation</li>`,
+                `</ul>`,
+                `</li>`,
+                `</ul>`,
+                `</div>`,
+
+                `<div style="margin-bottom: 25px;">`,
+                `<h4 style="color: #1e40af; font-size: 1.05em; margin-bottom: 10px;"><strong>3. DGEMV: Minimal Vector Benefit</strong></h4>`,
+                `<ul style="color: #555; line-height: 1.8; margin-left: 20px;">`,
+                `<li>Best case: Size 1024 shows ~<strong style="color: #d97706;">${dgemv1024Improvement.toFixed(0)}% improvement</strong> (${dgemvBest1024.toFixed(1)} vs ${dgemvGeneric1024.toFixed(1)} MFLOPS)</li>`,
+                `<li>Most sizes: <strong style="color: #dc2626;">Performance degradation or no benefit</strong></li>`,
+                `<li>Double-precision memory bandwidth requirements overwhelm vectorization advantages</li>`,
+                `<li><strong>Observation:</strong> DGEMV vectorization on current RVV implementations provides limited practical benefit</li>`,
+                `</ul>`,
+                `</div>`,
+
+                `<div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-top: 20px;">`,
+                `<h4 style="margin-top: 0; color: #92400e; font-size: 1em;"><strong>💡 GEMV Optimization Recommendation:</strong></h4>`,
+                `<ul style="color: #78350f; line-height: 1.7; margin-left: 20px; font-size: 0.95em;">`,
+                `<li><strong>SGEMV:</strong> Use RVV kernels for <strong style="color: #059669;">vectors ≤ 2048</strong>, fall back to GENERIC for size 4096+</li>`,
+                `<li><strong>DGEMV:</strong> RVV optimization shows <strong style="color: #d97706;">marginal benefit</strong>; consider GENERIC for most workloads</li>`,
+                `<li><strong>LMUL impact:</strong> Minimal differentiation between LMUL settings in GEMV, unlike GEMM where it's significant</li>`,
+                `</ul>`,
+                `</div>`,
+            ];
+
+            const analysis = [
+                `<h3 class="text-lg font-bold mt-4 mb-2 border-b pb-1 text-blue-600">1. Vectorization Gains: ZVL128B and ZVL256B vs. GENERIC (MFLOPS at Size 4096)</h3>`,
+                
+                `<h4 class="text-md font-semibold mt-4 mb-1 text-gray-700">A. Double Precision (DGEMV) Performance at Size 4096</h4>`,
+                `<ul class="list-disc ml-6 text-gray-700 space-y-2">`,
+                `<li><b>GENERIC:</b> <span class="flops-highlight">${dgemvGeneric.toFixed(2)} MFLOPS</span> (baseline)</li>`,
+                `<li><b>ZVL128B (LMUL=1):</b> <span class="flops-highlight">${dgemvZVL128B_1.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio">${dgemvZVL128B_1_Speedup.toFixed(2)}x</span></b></li>`,
+                `<li><b>ZVL128B (LMUL=4):</b> <span class="flops-highlight">${dgemvZVL128B_4.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio">${dgemvZVL128B_4_Speedup.toFixed(2)}x</span></b></li>`,
+                `<li><b>ZVL256B (LMUL=1):</b> <span class="flops-highlight">${dgemvZVL256B_1.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio" style="color: #dc2626;">${dgemvZVL256B_1_Speedup.toFixed(2)}x</span></b> ⚠️ Slower than generic!</li>`,
+                `<li><b>ZVL256B (LMUL=2):</b> <span class="flops-highlight">${dgemvZVL256B_2.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio" style="color: #dc2626;">${dgemvZVL256B_2_Speedup.toFixed(2)}x</span></b> ⚠️ Slower than generic!</li>`,
+                `</ul>`,
+
+                `<h4 class="text-md font-semibold mt-6 mb-1 text-gray-700">B. Single Precision (SGEMV) Performance at Size 4096</h4>`,
+                `<ul class="list-disc ml-6 text-gray-700 space-y-2">`,
+                `<li><b>GENERIC:</b> <span class="flops-highlight">${sgemvGeneric.toFixed(2)} MFLOPS</span> (baseline)</li>`,
+                `<li><b>ZVL128B (LMUL=1):</b> <span class="flops-highlight">${sgemvZVL128B_1.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio">${sgemvZVL128B_1_Speedup.toFixed(2)}x</span></b> ✓ Best for ZVL128B</li>`,
+                `<li><b>ZVL128B (LMUL=2):</b> <span class="flops-highlight">${sgemvZVL128B_2.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio">${sgemvZVL128B_2_Speedup.toFixed(2)}x</span></b></li>`,
+                `<li><b>ZVL256B (LMUL=1):</b> <span class="flops-highlight">${sgemvZVL256B_1.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio">${sgemvZVL256B_1_Speedup.toFixed(2)}x</span></b> ✓ Lower than expected</li>`,
+                `<li><b>ZVL256B (LMUL=2):</b> <span class="flops-highlight">${sgemvZVL256B_2.toFixed(2)} MFLOPS</span> - Speedup: <b><span class="flops-ratio">${sgemvZVL256B_2_Speedup.toFixed(2)}x</span></b></li>`,
+                `</ul>`,
+
+                `<h3 class="text-lg font-bold mt-6 mb-2 border-b pb-1 text-blue-600">2. LMUL Impact Analysis at Size 4096</h3>`,
+                `<ul class="list-disc ml-6 text-gray-700 space-y-2">`,
+                `<li><b>DGEMV ZVL128B:</b> LMUL=1 vs LMUL=4 show similar poor performance (both <1x speedup)</li>`,
+                `<li><b>DGEMV ZVL256B:</b> Both LMUL settings show significant slowdown vs GENERIC</li>`,
+                `<li><b>SGEMV ZVL128B:</b> LMUL=1 (${sgemvZVL128B_1.toFixed(2)} MFLOPS) slightly better than LMUL=2 (${sgemvZVL128B_2.toFixed(2)} MFLOPS)</li>`,
+                `<li><b>SGEMV ZVL256B:</b> LMUL=1 (${sgemvZVL256B_1.toFixed(2)} MFLOPS) slightly better than LMUL=2 (${sgemvZVL256B_2.toFixed(2)} MFLOPS)</li>`,
+                `<li><b>Key Finding:</b> For GEMV, LMUL=1 generally provides best results. Higher LMUL doesn't help memory-bound operations.</li>`,
+                `</ul>`,
+            ];
+
+            // Update key findings section
+            document.getElementById('key-findings-container').innerHTML = keyFindings.join('');
+
+            return analysis.join('');
+        }
+
+        function renderData(data) {
+            const tableBody = document.querySelector('#raw-data-table tbody');
+            const allData = data.filter(d => d.Precision === 'DGEMV' || d.Precision === 'SGEMV')
+                .sort((a, b) => {
+                    if (a.Precision !== b.Precision) {
+                        return a.Precision.localeCompare(b.Precision);
+                    }
+                    if (a.Target !== b.Target) {
+                        return a.Target.localeCompare(b.Target);
+                    }
+                    const aLMUL = a.LMUL === 'N/A' ? -1 : a.LMUL;
+                    const bLMUL = b.LMUL === 'N/A' ? -1 : b.LMUL;
+                    if (aLMUL !== bLMUL) {
+                        return aLMUL - bLMUL;
+                    }
+                    return a.VectorSize - b.VectorSize;
+                });
+            tableBody.innerHTML = allData.map(d => `
+                <tr class="hover:bg-gray-50 transition duration-150 ease-in-out">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${d.Precision}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${d.Target}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${d.LMUL}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${d.VectorSize}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">${d.Flops.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${d.Time.toFixed(6)}</td>
+                </tr>
+            `).join('');
+        }
+        
+        function startApp() {
+            try {
+                const parsedData = parseCSV(csvData);
+                const analysisHtml = analyzeData(parsedData);
+                document.getElementById('analysis-output').innerHTML = analysisHtml;
+                renderData(parsedData);
+                
+                const dgemvChartData = prepareChartData(parsedData, DGEMV_CONFIGS, false);
+                createChart('dgemv-chart', dgemvChartData, 'MFLOPS (Higher is better)', ' MFLOPS');
+
+                const sgemvChartData = prepareChartData(parsedData, SGEMV_CONFIGS, false);
+                createChart('sgemv-chart', sgemvChartData, 'MFLOPS (Higher is better)', ' MFLOPS');
+
+                const dgemvSpeedupChartData = prepareChartData(parsedData, DGEMV_SPEEDUP_CONFIGS, true);
+                createChart('dgemv-speedup-chart', dgemvSpeedupChartData, 'Speedup (GENERIC Time / Target Time)', 'x', 0.0, true);
+
+                const sgemvSpeedupChartData = prepareChartData(parsedData, SGEMV_SPEEDUP_CONFIGS, true);
+                createChart('sgemv-speedup-chart', sgemvSpeedupChartData, 'Speedup (GENERIC Time / Target Time)', 'x', 0.0, true);
+
+            } catch (error) {
+                console.error("Error during data processing:", error);
+                document.getElementById('analysis-output').innerHTML = `<p class="text-red-500">An error occurred while processing the data: ${error.message}</p>`;
+            }
+        }
+
+        const chartObserver = new MutationObserver(function(mutations, observer) {
+            if (typeof window.Chart !== 'undefined') {
+                observer.disconnect(); 
+                startApp();
+            }
+        });
+
+        chartObserver.observe(document.head, { childList: true, subtree: true });
+        chartObserver.observe(document.body, { childList: true, subtree: true });
+        
+        window.onload = function() {
+            if (typeof window.Chart !== 'undefined') {
+                chartObserver.disconnect(); 
+                startApp();
+            }
+        };
+        
+        if (typeof window.Chart !== 'undefined') {
+            startApp();
+        }
+
+    </script>
+</body>
+</html>
